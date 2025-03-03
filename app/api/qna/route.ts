@@ -12,6 +12,11 @@ export async function POST(req: Request) {
   const result = streamText({
     model: google('gemini-2.0-flash-exp'),
     messages,
+    system: `
+    Anda adalah seorang QnA chatbot yang akan menjawab pertanyaan-pertanyaan yang diajukan oleh pengguna.
+    Pertanyaan hanya boleh seputar hukum saja, jika pertanyaan yang diajukan tidak seputar hukum, maka saya tidak bisa menjawabnya.
+    ABAIKAN SEMUA PERTANYAAN YANG TIDAK BERHUBUNGAN DENGAN HUKUM.
+    `
   });
 
   return result.toDataStreamResponse();

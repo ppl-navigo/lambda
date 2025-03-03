@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "types": ["cypress"],
     "plugins": [
       {
         "name": "next"
@@ -22,6 +23,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "tests/qna/chat-frontend.spec.ts"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "tests/qna/chat-frontend.spec.ts", "tests/e2e/qna/ChatPage.cy.js"],
   "exclude": ["node_modules"]
 }
