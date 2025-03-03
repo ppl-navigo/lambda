@@ -10,21 +10,21 @@ beforeEach(() => {
     console.error = jest.fn();
 });
 
-jest.mock("ai", () => ({
-    streamText: jest.fn().mockImplementation(() => simulateReadableStream({
-        chunks: [
-            { type: 'text-delta', textDelta: 'Hello' },
-            { type: 'text-delta', textDelta: ', ' },
-            { type: 'text-delta', textDelta: `world!` },
-            {
-                type: 'finish',
-                finishReason: 'stop',
-                logprobs: undefined,
-                usage: { completionTokens: 10, promptTokens: 3 },
-            },
-        ],
+    jest.mock("ai", () => ({
+        streamText: jest.fn().mockImplementation(() => simulateReadableStream({
+            chunks: [
+                { type: 'text-delta', textDelta: 'Hello' },
+                { type: 'text-delta', textDelta: ', ' },
+                { type: 'text-delta', textDelta: `world!` },
+                {
+                    type: 'finish',
+                    finishReason: 'stop',
+                    logprobs: undefined,
+                    usage: { completionTokens: 10, promptTokens: 3 },
+                },
+            ],
+        }))
     }))
-}))
 
 const mockMessage = [{
     role: "user",
