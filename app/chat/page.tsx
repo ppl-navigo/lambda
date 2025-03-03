@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useChat } from '@ai-sdk/react';
 
 export default function Chat() {
@@ -7,23 +9,22 @@ export default function Chat() {
     api: '/api/qna',
   });
   return (
-    <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
+    <div className="">
       {messages.map(m => (
-        <div key={m.id} className="whitespace-pre-wrap">
+        <div key={m.id} className="">
           {m.role === 'user' ? 'User: ' : 'AI: '}
           {m.content}
         </div>
       ))}
-
-      <form onSubmit={handleSubmit} id="chat-form">
-        <input
-          id="chat-input"
-          className="fixed dark:bg-zinc-900 bottom-0 w-full max-w-md p-2 mb-8 border border-zinc-300 dark:border-zinc-800 rounded shadow-xl"
-          value={input}
-          placeholder="Say something..."
-          onChange={handleInputChange}
+      <form onSubmit={handleSubmit} id="chat-form" className='flex w-full max-w-sm items-center space-x-2'>
+        <Input 
+            id='chat-input' 
+            value={input} 
+            onChange={handleInputChange} 
+            type="text" 
+            placeholder="Say something..." 
         />
-        <input type="submit" id="chat-submit" value="Submit" />
+        <Button id="chat-submit" type="submit">Send</Button>
       </form>
     </div>
   );
