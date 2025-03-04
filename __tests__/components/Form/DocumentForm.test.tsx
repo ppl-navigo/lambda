@@ -60,17 +60,7 @@ describe("DocumentForm Component", () => {
     expect(screen.queryByPlaceholderText("Pihak 3")).not.toBeInTheDocument()
   })
 
-  it("calls the onGenerate function when 'Hasilkan Dokumen' is clicked", () => {
-    const mockOnGenerate = jest.fn()
-    render(<DocumentForm onGenerate={mockOnGenerate} />)
-
-    const generateButton = screen.getByText("Hasilkan Dokumen")
-    fireEvent.click(generateButton)
-
-    expect(mockOnGenerate).toHaveBeenCalled()
-  })
-
-  it("disables selecting end date before start date", async () => {
+  it("prevents selecting an end date before start date", async () => {
     render(<DocumentForm onGenerate={jest.fn()} />)
 
     const startDateButton = screen.getByText("Tanggal Mulai")
@@ -84,5 +74,75 @@ describe("DocumentForm Component", () => {
     await screen.findByText(
       "Tanggal selesai tidak boleh sebelum tanggal mulai."
     )
+  })
+
+  it("updates rights and obligations correctly", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />)
+
+    // Get all "Tambah Hak" buttons and click the first one
+    const addRightButtons = screen.getAllByText("Tambah Hak")
+    fireEvent.click(addRightButtons[0]) // Assuming Pihak 1 is the first
+
+    // Check that a new input field is added
+    const rightInputs = screen.getAllByRole("textbox")
+    expect(rightInputs.length).toBeGreaterThan(2) // Ensure new input is added
+
+    fireEvent.change(rightInputs[rightInputs.length - 1], {
+      target: { value: "Hak baru" },
+    })
+    expect(rightInputs[rightInputs.length - 1]).toHaveValue("Hak baru")
+  })
+
+  it("adds and removes multiple obligations dynamically", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />)
+
+    // Get all "Tambah Kewajiban" buttons and click the first one (for "Pihak 1")
+    const addObligationButtons = screen.getAllByText("Tambah Kewajiban")
+    fireEvent.click(addObligationButtons[0]) // Adds one obligation
+    fireEvent.click(addObligationButtons[0]) // Adds another obligation
+
+    // Check if two additional obligation inputs were added
+    const obligationInputs = screen.getAllByRole("textbox")
+    expect(obligationInputs.length).toBeGreaterThan(2) // Ensure new obligations are added
+
+    // Remove one obligation
+    const removeObligationButtons = screen.getAllByText("Hapus Kewajiban")
+    fireEvent.click(removeObligationButtons[0])
+
+    // Ensure one obligation was removed
+    expect(screen.getAllByRole("textbox").length).toBe(
+      obligationInputs.length - 1
+    )
+  })
+
+  it("calls the onGenerate function when 'Hasilkan Dokumen' is clicked", () => {
+    const mockOnGenerate = jest.fn()
+    render(<DocumentForm onGenerate={mockOnGenerate} />)
+
+    const generateButton = screen.getByText("Hasilkan Dokumen")
+    fireEvent.click(generateButton)
+
+    expect(mockOnGenerate).toHaveBeenCalled()
+  })
+
+  it("does not crash when updating party names dynamically", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />)
+
+    const partyInput = screen.getByPlaceholderText("Pihak 1")
+    fireEvent.change(partyInput, { target: { value: "Perusahaan A" } })
+    expect(partyInput).toHaveValue("Perusahaan A")
+  })
+
+  it("handles edge case when removing the only added party", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />)
+
+    const addPartyButton = screen.getByText("Tambahkan Pihak")
+    fireEvent.click(addPartyButton) // Adds Pihak 3
+    expect(screen.getByPlaceholderText("Pihak 3")).toBeInTheDocument()
+
+    const removePartyButton = screen.getByText("Hapus Pihak")
+    fireEvent.click(removePartyButton) // Removes Pihak 3
+
+    expect(screen.queryByPlaceholderText("Pihak 3")).not.toBeInTheDocument()
   })
 })
