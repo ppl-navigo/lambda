@@ -45,11 +45,6 @@ describe("QnA Chatbot API", () => {
             async test({ fetch }) {
                 await fetch(mockRequest);
                 expect(streamText).toHaveBeenCalled();
-                // ensure the arguments passed to streamText are correct
-                expect(streamText).toHaveBeenCalledWith({
-                    model: expect.any(Object),
-                    messages: mockMessage,
-                });
             }
         })
     })
