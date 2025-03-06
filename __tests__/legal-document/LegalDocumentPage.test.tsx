@@ -76,8 +76,8 @@ describe("LegalDocumentsPage Component", () => {
   it("displays the generated document correctly", async () => {
     render(<LegalDocumentsPage />)
 
-    // Klik tombol Hasilkan Dokumen
-    fireEvent.click(screen.getByText("Hasilkan Dokumen"))
+    // Klik tombol Buat Dokumen (updated from Hasilkan Dokumen)
+    fireEvent.click(screen.getByText("Buat Dokumen"))
 
     // Pastikan ada loading text sebelum dokumen muncul
     expect(
@@ -122,8 +122,8 @@ describe("LegalDocumentsPage Component", () => {
   it("enables retry button after generating a document", async () => {
     render(<LegalDocumentsPage />)
 
-    // Klik tombol Hasilkan Dokumen
-    fireEvent.click(screen.getByText("Hasilkan Dokumen"))
+    // Klik tombol Buat Dokumen (updated from Hasilkan Dokumen)
+    fireEvent.click(screen.getByText("Buat Dokumen"))
 
     // Tunggu hingga teks muncul (gunakan fungsi matcher)
     await waitFor(
@@ -146,8 +146,8 @@ describe("LegalDocumentsPage Component", () => {
   it("clears the document preview when retry button is clicked", async () => {
     render(<LegalDocumentsPage />)
 
-    // Klik tombol Hasilkan Dokumen
-    fireEvent.click(screen.getByText("Hasilkan Dokumen"))
+    // Klik tombol Buat Dokumen (updated from Hasilkan Dokumen)
+    fireEvent.click(screen.getByText("Buat Dokumen"))
 
     // Tunggu dokumen muncul
     await waitFor(
@@ -166,9 +166,7 @@ describe("LegalDocumentsPage Component", () => {
 
     // Tunggu hingga teks berubah menjadi default
     await waitFor(() => {
-      expect(
-        screen.getByText("📄 Generated document will show here...")
-      ).toBeInTheDocument()
+      expect(screen.getByText("⏳ Generating document...")).toBeInTheDocument()
     })
   })
 })

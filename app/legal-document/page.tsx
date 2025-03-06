@@ -123,28 +123,27 @@ export default function LegalDocumentsPage() {
             {renderDocumentContent()} {/* Extracted function usage */}
           </div>
 
-          {/* General Prompting Box (Disabled if No Document) */}
+          {/* General Prompting Box (Disabled initially and when generating) */}
           <textarea
             className={`mt-4 p-3 rounded-lg w-full border ${
-              generatedDocument
+              generatedDocument && !isGenerating
                 ? "bg-[#09090B] text-white border-[#27272A]"
                 : "bg-gray-700 text-gray-500 border-[#27272A] cursor-not-allowed"
             }`}
             placeholder="Tambahkan komentar revisi..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            disabled={!generatedDocument}
+            disabled={!generatedDocument || isGenerating}
           ></textarea>
-
-          {/* Retry Button (Disabled if No Document) */}
+          {/* Retry Button */}
           <button
             className={`mt-4 px-4 py-2 rounded-lg ${
-              generatedDocument
-                ? "bg-white text-gray-900 hover:bg-gray-300"
-                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              !generatedDocument || isGenerating
+                ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+                : "bg-white text-gray-900 hover:bg-gray-300"
             }`}
-            onClick={() => setGeneratedDocument("")}
-            disabled={!generatedDocument}
+            onClick={handleGenerateDocument}
+            disabled={!generatedDocument || isGenerating}
           >
             Coba Buat Ulang
           </button>

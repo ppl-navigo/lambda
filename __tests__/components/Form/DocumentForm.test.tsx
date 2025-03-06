@@ -18,8 +18,12 @@ describe("DocumentForm Component", () => {
     expect(screen.getByText("Tanggal Mulai")).toBeInTheDocument()
     expect(screen.getByText("Tanggal Selesai")).toBeInTheDocument()
     expect(screen.getByText("Pihak-Pihak")).toBeInTheDocument()
-    expect(screen.getByText("Pihak 1")).toBeInTheDocument()
-    expect(screen.getByText("Pihak 2")).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("Pihak 1 : Nama atau Organisasi")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("Pihak 2 : Nama atau Organisasi")
+    ).toBeInTheDocument()
   })
 
   it("allows users to enter a title and objective", () => {
@@ -44,7 +48,9 @@ describe("DocumentForm Component", () => {
     const addPartyButton = screen.getByText("Tambahkan Pihak")
     fireEvent.click(addPartyButton)
 
-    expect(screen.getByPlaceholderText("Pihak 3")).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).toBeInTheDocument()
   })
 
   it("removes the last party when 'Hapus Pihak' is clicked", () => {
@@ -52,12 +58,16 @@ describe("DocumentForm Component", () => {
 
     const addPartyButton = screen.getByText("Tambahkan Pihak")
     fireEvent.click(addPartyButton) // Adds Pihak 3
-    expect(screen.getByPlaceholderText("Pihak 3")).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).toBeInTheDocument()
 
     const removePartyButton = screen.getByText("Hapus Pihak")
     fireEvent.click(removePartyButton)
 
-    expect(screen.queryByPlaceholderText("Pihak 3")).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).not.toBeInTheDocument()
   })
 
   it("prevents selecting an end date before start date", async () => {
@@ -84,7 +94,7 @@ describe("DocumentForm Component", () => {
     fireEvent.click(addRightButtons[0]) // Assuming Pihak 1 is the first
 
     // Check that a new input field is added
-    const rightInputs = screen.getAllByRole("textbox")
+    const rightInputs = screen.getAllByPlaceholderText("Hak Pihak")
     expect(rightInputs.length).toBeGreaterThan(2) // Ensure new input is added
 
     fireEvent.change(rightInputs[rightInputs.length - 1], {
@@ -96,30 +106,40 @@ describe("DocumentForm Component", () => {
   it("adds and removes multiple obligations dynamically", () => {
     render(<DocumentForm onGenerate={jest.fn()} />)
 
-    // Get all "Tambah Kewajiban" buttons and click the first one (for "Pihak 1")
-    const addObligationButtons = screen.getAllByText("Tambah Kewajiban")
-    fireEvent.click(addObligationButtons[0]) // Adds one obligation
-    fireEvent.click(addObligationButtons[0]) // Adds another obligation
+    // First, count the initial number of obligation inputs
+    const initialObligationInputs =
+      screen.getAllByPlaceholderText("Kewajiban Pihak")
+    const initialCount = initialObligationInputs.length
 
-    // Check if two additional obligation inputs were added
-    const obligationInputs = screen.getAllByRole("textbox")
-    expect(obligationInputs.length).toBeGreaterThan(2) // Ensure new obligations are added
+    // Get all "Tambah Kewajiban" buttons
+    const addObligationButtons = screen.getAllByText("Tambah Kewajiban")
+    // Click the first button (for Pihak 1)
+    fireEvent.click(addObligationButtons[0])
+
+    // Verify one obligation was added (total increased by 1)
+    let updatedInputs = screen.getAllByPlaceholderText("Kewajiban Pihak")
+    expect(updatedInputs.length).toBe(initialCount + 1)
+
+    // Add another obligation
+    fireEvent.click(addObligationButtons[0])
+    updatedInputs = screen.getAllByPlaceholderText("Kewajiban Pihak")
+    expect(updatedInputs.length).toBe(initialCount + 2)
 
     // Remove one obligation
     const removeObligationButtons = screen.getAllByText("Hapus Kewajiban")
     fireEvent.click(removeObligationButtons[0])
 
     // Ensure one obligation was removed
-    expect(screen.getAllByRole("textbox").length).toBe(
-      obligationInputs.length - 1
+    expect(screen.getAllByPlaceholderText("Kewajiban Pihak").length).toBe(
+      initialCount + 1
     )
   })
 
-  it("calls the onGenerate function when 'Hasilkan Dokumen' is clicked", () => {
+  it("calls the onGenerate function when 'Buat Dokumen' is clicked", () => {
     const mockOnGenerate = jest.fn()
     render(<DocumentForm onGenerate={mockOnGenerate} />)
 
-    const generateButton = screen.getByText("Hasilkan Dokumen")
+    const generateButton = screen.getByText("Buat Dokumen")
     fireEvent.click(generateButton)
 
     expect(mockOnGenerate).toHaveBeenCalled()
@@ -128,7 +148,9 @@ describe("DocumentForm Component", () => {
   it("does not crash when updating party names dynamically", () => {
     render(<DocumentForm onGenerate={jest.fn()} />)
 
-    const partyInput = screen.getByPlaceholderText("Pihak 1")
+    const partyInput = screen.getByPlaceholderText(
+      "Pihak 1 : Nama atau Organisasi"
+    )
     fireEvent.change(partyInput, { target: { value: "Perusahaan A" } })
     expect(partyInput).toHaveValue("Perusahaan A")
   })
@@ -138,11 +160,15 @@ describe("DocumentForm Component", () => {
 
     const addPartyButton = screen.getByText("Tambahkan Pihak")
     fireEvent.click(addPartyButton) // Adds Pihak 3
-    expect(screen.getByPlaceholderText("Pihak 3")).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).toBeInTheDocument()
 
     const removePartyButton = screen.getByText("Hapus Pihak")
     fireEvent.click(removePartyButton) // Removes Pihak 3
 
-    expect(screen.queryByPlaceholderText("Pihak 3")).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).not.toBeInTheDocument()
   })
 })
