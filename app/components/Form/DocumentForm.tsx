@@ -102,7 +102,10 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
 
       {/* Tujuan */}
       <div className="mb-4">
-        <label  htmlFor="tujuan" className="block text-lg font-semibold text-[#FAFAFA] mb-2">
+        <label
+          htmlFor="tujuan"
+          className="block text-lg font-semibold text-[#FAFAFA] mb-2"
+        >
           Tujuan
         </label>
         <Textarea
@@ -165,20 +168,22 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
         <h3 className="text-lg font-semibold text-[#FAFAFA] mb-2">
           Pihak-Pihak
         </h3>
-        {parties.map((party, index) => (
+        {parties.map((party) => (
           <Input
-            key={index}
+            key={party} // Use party name as the key instead of index
             value={party.startsWith("Pihak") ? "" : party} // Hapus teks default saat diketik
             onChange={(e) => {
               const updatedParties = [...parties]
-              const oldPartyName = parties[index]
-              const newPartyName = e.target.value || `Pihak ${index + 1}`
+              const oldPartyName = party
+              const newPartyName =
+                e.target.value || `Pihak ${parties.indexOf(party) + 1}`
 
-              updatedParties[index] = newPartyName
-
-              // Perbarui key di rights & obligations
               const updatedRights = { ...rights }
               const updatedObligations = { ...obligations }
+
+              // Perbarui nama dalam daftar parties
+              const partyIndex = parties.indexOf(party)
+              updatedParties[partyIndex] = newPartyName
 
               if (oldPartyName !== newPartyName) {
                 updatedRights[newPartyName] = updatedRights[oldPartyName] || [
@@ -196,7 +201,7 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
               setObligations(updatedObligations)
             }}
             className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA] mb-2"
-            placeholder={`Pihak ${index + 1}`}
+            placeholder={`Pihak ${parties.indexOf(party) + 1}`}
           />
         ))}
 
@@ -246,13 +251,19 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
           <h3 className="text-lg font-semibold mb-1">{party}</h3>
 
           {/* Hak */}
-          <label className="text-[#FAFAFA] block mt-1 mb-2">Hak</label>
-          {rights[party].map((right, idx) => (
-            <div key={idx} className="mb-2">
+          <label
+            htmlFor={`hak-${party}`}
+            className="text-[#FAFAFA] block mt-1 mb-2"
+          >
+            Hak
+          </label>
+          {rights[party].map((right, index) => (
+            <div key={`${party}-hak-${index}`} className="mb-2">
               <Input
+                id={`hak-${party}-${index}`} // Unique id for accessibility
                 className="bg-[#09090B] border border-[#27272A] text-white"
                 value={right}
-                onChange={(e) => updateRights(party, idx, e.target.value)}
+                onChange={(e) => updateRights(party, index, e.target.value)}
               />
             </div>
           ))}
@@ -276,13 +287,21 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
           </div>
 
           {/* Kewajiban */}
-          <label className="text-[#FAFAFA] block mt-4 mb-2">Kewajiban</label>
-          {obligations[party].map((obligation, idx) => (
-            <div key={idx} className="mb-2">
+          <label
+            htmlFor={`kewajiban-${party}`}
+            className="text-[#FAFAFA] block mt-4 mb-2"
+          >
+            Kewajiban
+          </label>
+          {obligations[party].map((obligation, index) => (
+            <div key={`${party}-kewajiban-${index}`} className="mb-2">
               <Input
+                id={`kewajiban-${party}-${index}`} // Unique id for accessibility
                 className="bg-[#09090B] border border-[#27272A] text-white"
                 value={obligation}
-                onChange={(e) => updateObligations(party, idx, e.target.value)}
+                onChange={(e) =>
+                  updateObligations(party, index, e.target.value)
+                }
               />
             </div>
           ))}

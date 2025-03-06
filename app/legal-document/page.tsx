@@ -30,6 +30,19 @@ export default function LegalDocumentsPage() {
       setIsGenerating(false)
     }, 3000)
   }
+  const renderDocumentContent = () => {
+    if (isGenerating) {
+      return (
+        <p className="text-gray-400 animate-pulse">⏳ Generating document...</p>
+      )
+    }
+    if (generatedDocument) {
+      return <p>{generatedDocument}</p>
+    }
+    return (
+      <p className="text-gray-400">📄 Generated document will show here...</p>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#09090B] text-white p-10">
@@ -107,17 +120,7 @@ export default function LegalDocumentsPage() {
         {/* Left Side - Document Streaming Preview */}
         <div className="w-2/3 bg-[#09090B] p-6 rounded-lg border border-[#27272A] flex flex-col">
           <div className="flex-grow border border-[#27272A] p-4 rounded-lg overflow-auto">
-            {isGenerating ? (
-              <p className="text-gray-400 animate-pulse">
-                ⏳ Generating document...
-              </p>
-            ) : generatedDocument ? (
-              <p>{generatedDocument}</p>
-            ) : (
-              <p className="text-gray-400">
-                📄 Generated document will show here...
-              </p>
-            )}
+            {renderDocumentContent()} {/* Extracted function usage */}
           </div>
 
           {/* General Prompting Box (Disabled if No Document) */}
