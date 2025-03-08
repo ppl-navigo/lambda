@@ -19,7 +19,25 @@ const config: Config = {
   preset: 'ts-jest',
   transform: {
     "^.+\\.tsx?$": ['ts-jest', { tsconfig: "tsconfig.jest.json" }]
-  }
+  },
+  moduleNameMapper: {
+    "^@/(.*)$": "<rootDir>/$1"
+  },
+  coveragePathIgnorePatterns: [
+    "/components/ui/",
+    "/node_modules",
+    "/tests",
+    "/.next",
+    "/.vercel",
+    "/.github",
+    "/.vscode",
+    "/.git",
+    "/public",
+    "/cypress",
+    "/coverage",
+    "/dist",
+    "/.swc"
+  ]
 };
 
 export default createJestConfig(config);
