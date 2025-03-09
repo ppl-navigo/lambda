@@ -39,6 +39,15 @@ export function LegalChatbot({
         scrollToBottom()
     }, [messages])
 
+    // Initialize with initialMessages when they change
+    useEffect(() => {
+        // Only update if the initialMessages are different from current messages
+        // and if it's not just a result of our own updates
+        if (initialMessages.length !== messages.length && initialMessages.length !== prevMessagesLengthRef.current) {
+            setMessages(initialMessages)
+        }
+    }, [initialMessages])
+
     useEffect(() => {
         if (messages.length !== initialMessages.length && onMessagesChange) {
             prevMessagesLengthRef.current = messages.length

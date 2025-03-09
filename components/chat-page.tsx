@@ -164,7 +164,8 @@ export function ChatPage() {
       >
         <div className="p-4 border-b">
           <Button onClick={createNewChat} className="w-full" variant="outline">
-            <Plus className="mr-2 h-4 w-4" /> New Chat
+            <Plus className="mr-2 h-4 w-4 text-white" /> 
+            <span className="text-white">New Chat</span>
           </Button>
         </div>
         <div className="flex-1 overflow-auto">
