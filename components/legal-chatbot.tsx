@@ -112,7 +112,7 @@ export function LegalChatbot({
                 </div>
             </ScrollArea>
             <div className="border-t p-4">
-                <form onSubmit={handleSubmit} className="flex gap-2 max-w-3xl mx-auto">
+                <form onSubmit={handleSubmit} className="flex gap-2 max-w-3xl mx-auto text-white">
                     <Input
                         placeholder="Ask a legal question..."
                         value={input}
