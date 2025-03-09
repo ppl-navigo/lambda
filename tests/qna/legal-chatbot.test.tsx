@@ -5,6 +5,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { LegalChatbot, Message } from "@/components/legal-chatbot"
 import { generateLegalResponse } from "@/app/actions"
 
+import "@testing-library/jest-dom"
+
+import React from "react"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { LegalChatbot, Message } from "@/components/legal-chatbot"
+import { generateLegalResponse } from "@/app/actions"
+
 jest.mock("@/app/actions", () => ({
     generateLegalResponse: jest.fn(),
 }))
@@ -14,11 +21,12 @@ describe("LegalChatbot", () => {
         role: "assistant",
         content:
             "Hello, I'm your legal assistant. I can answer legal questions and provide citations. How can I help you today?",
-    }
+    })
 
-    jest.mock("@/app/actions", () => ({
-        generateLegalResponse: jest.fn(),
-    }))
+    // Removed duplicate mock declaration for "@/app/actions"
+    
+    // ... rest of the test code
+})
 
     describe("LegalChatbot", () => {
         const initialMessage: Message = {
