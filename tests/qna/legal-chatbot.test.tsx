@@ -300,6 +300,3 @@ it("shows error message when generateLegalResponse fails", async () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith("Error generating response:", error)
     consoleErrorSpy.mockRestore()
 })
-jest.mock("@/app/actions", () => ({
-    generateLegalResponse: jest.fn(),
-}))
