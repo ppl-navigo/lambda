@@ -36,7 +36,8 @@ const config: Config = {
     "/cypress",
     "/coverage",
     "/dist",
-    "/.swc"
+    "/.swc",
+    "/app/.*?/page\\.tsx"
   ]
 };
 

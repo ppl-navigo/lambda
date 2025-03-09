@@ -108,7 +108,7 @@ export function LegalChatbot({
                                         <MathpixMarkdown text={formatMessageWithCitations(message.content)}/>
                                     </p>
                                 ) : (
-                                    <p className="prose">{message.content}</p>
+                                    <p className="prose dark:prose-invert">{message.content}</p>
                                 )}
                             </div>
                         ))}
