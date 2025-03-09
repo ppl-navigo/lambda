@@ -2,12 +2,18 @@ name: Create vercel preview URL on pull request
 on:
   pull_request:
     branches:
-      - main
+      - "*"
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      - run: npm install -g pnpm
+      - name: Run tests
+        run: pnpm test
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
