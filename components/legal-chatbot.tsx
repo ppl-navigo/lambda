@@ -47,7 +47,7 @@ export function LegalChatbot({
         if (initialMessages.length !== messages.length && initialMessages.length !== prevMessagesLengthRef.current) {
             setMessages(initialMessages)
         }
-    }, [initialMessages])
+    }, [initialMessages, messages.length])
 
     useEffect(() => {
         if (messages.length !== initialMessages.length && onMessagesChange) {

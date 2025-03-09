@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { LegalChatbot } from "@/components/legal-chatbot"
 import { ChatHistory } from "@/components/chat-history"
 import { Button } from "@/components/ui/button"
-import { PanelLeft, Plus, Settings } from "lucide-react"
+import { PanelLeft, Plus } from "lucide-react"
 
 type Message = {
   role: "user" | "assistant"
@@ -23,24 +23,8 @@ export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
-  const [isMobile, setIsMobile] = useState(false)
   const isInitialLoad = useRef(true)
   const updatingSession = useRef(false)
-
-  // Check if mobile on mount
-  useEffect(() => {
-    const checkIfMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-      if (window.innerWidth < 768) {
-        setSidebarOpen(false)
-      }
-    }
-
-    checkIfMobile()
-    window.addEventListener("resize", checkIfMobile)
-
-    return () => window.removeEventListener("resize", checkIfMobile)
-  }, [])
 
   // Load chat sessions from localStorage on mount
   useEffect(() => {

@@ -4,12 +4,18 @@ import { Button } from "@/components/ui/button"
 import { MessageSquare, Trash2 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 
+type ChatMessage = {
+    role: 'user' | 'assistant'
+    content: string
+    createdAt?: Date
+}
+
 type ChatSession = {
-  id: string
-  title: string
-  messages: any[]
-  createdAt: Date
-  updatedAt: Date
+    id: string
+    title: string
+    messages: ChatMessage[]
+    createdAt: Date
+    updatedAt: Date
 }
 
 interface ChatHistoryProps {
