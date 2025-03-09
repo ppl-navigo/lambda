@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Send } from "lucide-react"
 import { generateLegalResponse } from "@/app/actions"
 import { cn } from "@/lib/utils"
+import { MathpixMarkdown, MathpixLoader } from 'mathpix-markdown-it';
 
 export type Message = {
     role: "user" | "assistant"
@@ -92,33 +93,37 @@ export function LegalChatbot({
     return (
         <div className="flex flex-col h-full">
             <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4 max-w-3xl mx-auto">
-                    {messages.map((message, index) => (
-                        <div
-                            key={index}
-                            className={cn(
-                                "flex flex-col max-w-[80%] rounded-lg p-4",
-                                message.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "mr-auto bg-muted",
-                            )}
-                        >
-                            {message.role === "assistant" ? (
-                                <div className="prose dark:prose-invert">{formatMessageWithCitations(message.content)}</div>
-                            ) : (
-                                <p>{message.content}</p>
-                            )}
-                        </div>
-                    ))}
-                    {isLoading && (
-                        <div className="mr-auto bg-muted max-w-[80%] rounded-lg p-4">
-                            <div className="flex space-x-2">
-                                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" />
-                                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0.2s" }} />
-                                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0.4s" }} />
+                <MathpixLoader>
+                    <div className="space-y-4 max-w-3xl mx-auto">
+                        {messages.map((message, index) => (
+                            <div
+                                key={index}
+                                className={cn(
+                                    "flex flex-col max-w-[80%] rounded-lg p-4",
+                                    message.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "mr-auto bg-muted",
+                                )}
+                            >
+                                {message.role === "assistant" ? (
+                                    <p className="prose dark:prose-invert">
+                                        <MathpixMarkdown text={formatMessageWithCitations(message.content)}/>
+                                    </p>
+                                ) : (
+                                    <p className="prose">{message.content}</p>
+                                )}
                             </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
+                        ))}
+                        {isLoading && (
+                            <div className="mr-auto bg-muted max-w-[80%] rounded-lg p-4">
+                                <div className="flex space-x-2">
+                                    <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" />
+                                    <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0.2s" }} />
+                                    <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0.4s" }} />
+                                </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+                </MathpixLoader>
             </ScrollArea>
             <div className="border-t p-4">
                 <form onSubmit={handleSubmit} className="flex gap-2 max-w-3xl mx-auto text-white">
@@ -138,14 +143,6 @@ export function LegalChatbot({
     )
 }
 
-function formatMessageWithCitations(message: string) {
-    return message.split(/(\[\d+\])/g).map((part, index) => (
-        /\[\d+\]/.test(part) ? (
-            <sup key={index} className="text-primary font-bold">
-                {part}
-            </sup>
-        ) : (
-            <span key={index}>{part}</span>
-        )
-    ))
+function formatMessageWithCitations(message: string): string {
+    return message.replace(/(\[\d+\])/g, '**$1**');
 }
