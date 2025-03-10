@@ -1,13 +1,16 @@
 "use client"
 import { useState } from "react"
 import DocumentForm from "../components/Form/DocumentForm"
+
 import { Button } from "@/components/ui/button"
+
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 
 export default function LegalDocumentsPage() {
