@@ -1,4 +1,3 @@
-// __tests__/components/Streamer.test.tsx
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import Streamer from "../../app/components/Streamer";
