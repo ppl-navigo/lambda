@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,8 @@ import {
 import { Calendar } from "@/components/ui/calendar"
 
 interface DocumentFormProps {
-  onGenerate: () => void
+  onGenerate: (formData: unknown) => void
+  documentType?: string
 }
 
 interface Party {
@@ -22,7 +23,10 @@ interface Party {
   customName: string
 }
 
-const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
+const DocumentForm: React.FC<DocumentFormProps> = ({
+  onGenerate,
+  documentType = "MoU",
+}) => {
   const [judul, setJudul] = useState("")
   const [tujuan, setTujuan] = useState("")
   const [startDate, setStartDate] = useState<Date | null>(null)
@@ -40,6 +44,18 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
     "Pihak 2": [""],
   })
   const [errorMessage, setErrorMessage] = useState("")
+
+  // Listen for regenerate document event
+  useEffect(() => {
+    const handleRegenerate = () => {
+      handleSubmit()
+    }
+
+    document.addEventListener("regenerateDocument", handleRegenerate)
+    return () => {
+      document.removeEventListener("regenerateDocument", handleRegenerate)
+    }
+  }, [judul, tujuan, parties, rights, obligations, startDate, endDate])
 
   const handleEndDateChange = (date: Date | undefined) => {
     if (startDate && date && date < startDate) {
@@ -89,6 +105,62 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
   const removeObligation = (party: string, index: number) => {
     const updatedObligations = obligations[party].filter((_, i) => i !== index)
     setObligations({ ...obligations, [party]: updatedObligations })
+  }
+
+  // Form submission handler
+  const handleSubmit = () => {
+    // Basic form validation
+    if (!judul.trim()) {
+      alert("Judul dokumen tidak boleh kosong")
+      return
+    }
+
+    if (!tujuan.trim()) {
+      alert("Tujuan kerjasama tidak boleh kosong")
+      return
+    }
+
+    // Check if at least one party has a name
+    const hasNamedParty = parties.some(
+      (party) => party.customName.trim() !== ""
+    )
+    if (!hasNamedParty) {
+      alert("Setidaknya satu pihak harus memiliki nama")
+      return
+    }
+
+    // Prepare and submit form data
+    const formData = {
+      judul,
+      tujuan,
+      parties,
+      rights,
+      obligations,
+      startDate,
+      endDate,
+    }
+
+    onGenerate(formData)
+  }
+
+  // Form reset handler
+  const resetForm = () => {
+    setJudul("")
+    setTujuan("")
+    setStartDate(null)
+    setEndDate(null)
+    setParties([
+      { id: "Pihak 1", customName: "" },
+      { id: "Pihak 2", customName: "" },
+    ])
+    setRights({
+      "Pihak 1": [""],
+      "Pihak 2": [""],
+    })
+    setObligations({
+      "Pihak 1": [""],
+      "Pihak 2": [""],
+    })
   }
 
   return (
@@ -304,12 +376,16 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
 
       <div className="mt-6">
         <div className="flex gap-4">
-          <Button className="flex-1 bg-black text-white hover:bg-black-700 border border-white">
-            Simpan
+          <Button
+            className="flex-1 bg-black text-white hover:bg-black-700 border border-white"
+            onClick={resetForm}
+          >
+            Reset
           </Button>
           <Button
             className="flex-1 bg-white text-black hover:bg-gray-300"
-            onClick={onGenerate}
+            onClick={handleSubmit}
+            data-testid="generate-button"
           >
             Buat Dokumen
           </Button>
