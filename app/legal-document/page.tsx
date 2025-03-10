@@ -22,6 +22,7 @@ export default function LegalDocumentsPage() {
   )
   const [error, setError] = useState<string | null>(null)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleGenerateDocument = async (formData: any) => {
     setIsGenerating(true)
     setGeneratedDocument("")
@@ -33,6 +34,7 @@ export default function LegalDocumentsPage() {
         jenis_kontrak: selectedDocumentType,
         judul: formData.judul,
         tujuan: formData.tujuan,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pihak: formData.parties.map((party: any) => ({
           nama: party.customName || party.id,
           hak_pihak: formData.rights[party.id].filter(
@@ -57,7 +59,7 @@ export default function LegalDocumentsPage() {
 
       // Make API call with streaming enabled
       const response = await fetch(
-        "http://127.0.0.1:8000/legal-docs-generator/generate",
+        `${process.env.NEXT_PUBLIC_API_URL}/legal-docs-generator/generate`,
         {
           method: "POST",
           headers: {

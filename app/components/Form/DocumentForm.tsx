@@ -23,10 +23,7 @@ interface Party {
   customName: string
 }
 
-const DocumentForm: React.FC<DocumentFormProps> = ({
-  onGenerate,
-  documentType = "MoU",
-}) => {
+const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
   const [judul, setJudul] = useState("")
   const [tujuan, setTujuan] = useState("")
   const [startDate, setStartDate] = useState<Date | null>(null)
