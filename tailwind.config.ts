@@ -10,6 +10,9 @@ export default {
   theme: {
   	extend: {
   		colors: {
+  			'dark-bg': '#1A1A1A',
+  			'dark-input': '#333333',
+  			'button-blue': '#4D90FE',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

@@ -3,7 +3,7 @@
  * https://jestjs.io/docs/configuration
  */
 
-import type {Config} from 'jest';
+import type { Config } from 'jest';
 import nextJest from "next/jest";
 
 const createJestConfig = nextJest({
@@ -17,12 +17,6 @@ const config: Config = {
   coverageProvider: "v8",
   testEnvironment: "jsdom",
   preset: 'ts-jest',
-  transform: {
-    "^.+\\.tsx?$": ['ts-jest', { tsconfig: "tsconfig.jest.json" }]
-  },
-  moduleNameMapper: {
-    "^@/(.*)$": "<rootDir>/$1"
-  },
   coveragePathIgnorePatterns: [
     "/components/ui/",
     "/node_modules",
@@ -37,8 +31,24 @@ const config: Config = {
     "/coverage",
     "/dist",
     "/.swc",
-    "/app/.*?/page\\.tsx"
-  ]
-};
+    "/app/.*?/page\\.tsx",
+  ],
+  transform: {
+    "^.+\\.(ts|tsx)$": [
+      "ts-jest",
+      {
+        tsconfig: "tsconfig.jest.json",
+      },
+    ],
+    "^.+\\.(js|jsx|mjs|cjs)$": "babel-jest", // Use Babel for JS/JSX
+  },
+  transformIgnorePatterns: ["<rootDir>/node_modules/(?!(lucide-react)/)"],
+  moduleNameMapper: {
+    "^@/(.*)$": "<rootDir>/$1",
+    "\\.(css|less|sass|scss)$": "<rootDir>/__mocks__/styleMock.js",
+  },
+  resolver: "<rootDir>/jest.resolver.js",
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
+}
 
-export default createJestConfig(config);
+export default config
