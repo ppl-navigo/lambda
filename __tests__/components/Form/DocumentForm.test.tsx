@@ -135,14 +135,111 @@ describe("DocumentForm Component", () => {
     )
   })
 
+  it("calls the onGenerate function when 'Buat Dokumen' is clicked with valid data", () => {
+    const mockOnGenerate = jest.fn()
+    render(<DocumentForm onGenerate={mockOnGenerate} />)
+
+    // Fill in required fields to pass validation
+    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
+      target: { value: "Test Judul" },
+    })
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Kenapa Anda membuat MoU ini?"),
+      {
+        target: { value: "Test Tujuan" },
+      }
+    )
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Pihak 1 : Nama atau Organisasi"),
+      {
+        target: { value: "Perusahaan A" },
+      }
+    )
+
+    // Mock window.alert to prevent it from being called during test
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {})
+
+    // Click the generate button
+    const generateButton = screen.getByText("Buat Dokumen")
+    fireEvent.click(generateButton)
+
+    // Check that onGenerate was called with the expected form data
+    expect(mockOnGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judul: "Test Judul",
+        tujuan: "Test Tujuan",
+        parties: expect.arrayContaining([
+          expect.objectContaining({
+            id: "Pihak 1",
+            customName: "Perusahaan A",
+          }),
+        ]),
+      })
+    )
+
+    // Restore the original alert function
+    alertMock.mockRestore()
+  })
+
+  it("does not call onGenerate when form is invalid", () => {
+    const mockOnGenerate = jest.fn()
+    render(<DocumentForm onGenerate={mockOnGenerate} />)
+
+    // Mock window.alert to prevent it from being called during test
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {})
+
+    // Click the generate button without filling required fields
+    const generateButton = screen.getByText("Buat Dokumen")
+    fireEvent.click(generateButton)
+
+    // Check that onGenerate was not called
+    expect(mockOnGenerate).not.toHaveBeenCalled()
+
+    alertMock.mockRestore()
+  })
+
   it("calls the onGenerate function when 'Buat Dokumen' is clicked", () => {
     const mockOnGenerate = jest.fn()
     render(<DocumentForm onGenerate={mockOnGenerate} />)
 
+    // Fill in required fields to pass validation
+    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
+      target: { value: "Test Judul" },
+    })
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Kenapa Anda membuat MoU ini?"),
+      {
+        target: { value: "Test Tujuan" },
+      }
+    )
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Pihak 1 : Nama atau Organisasi"),
+      {
+        target: { value: "Perusahaan A" },
+      }
+    )
+
+    // Click the generate button
     const generateButton = screen.getByText("Buat Dokumen")
     fireEvent.click(generateButton)
 
-    expect(mockOnGenerate).toHaveBeenCalled()
+    // Verify that the function is called with the expected data
+    expect(mockOnGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judul: "Test Judul",
+        tujuan: "Test Tujuan",
+        parties: expect.arrayContaining([
+          expect.objectContaining({
+            id: "Pihak 1",
+            customName: "Perusahaan A",
+          }),
+        ]),
+      })
+    )
   })
 
   it("does not crash when updating party names dynamically", () => {

@@ -8,6 +8,39 @@ import {
 import LegalDocumentsPage from "../../app/legal-document/page"
 import "@testing-library/jest-dom"
 import userEvent from "@testing-library/user-event"
+import { act } from "react"
+
+beforeEach(() => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("Generated Content"))
+          controller.close()
+        },
+      }),
+    })
+  ) as jest.Mock
+})
+beforeAll(() => {
+  jest.spyOn(window, "alert").mockImplementation(() => {}) // Mock alert to prevent crashes
+})
+beforeEach(() => {
+  jest.spyOn(window, "alert").mockImplementation(() => {}) // Mock alert
+
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("Generated Content"))
+          controller.close()
+        },
+      }),
+    })
+  ) as jest.Mock
+})
 
 describe("LegalDocumentsPage Component", () => {
   it("renders the page with required elements", () => {
@@ -76,34 +109,44 @@ describe("LegalDocumentsPage Component", () => {
   it("displays the generated document correctly", async () => {
     render(<LegalDocumentsPage />)
 
-    // Klik tombol Buat Dokumen (updated from Hasilkan Dokumen)
-    fireEvent.click(screen.getByText("Buat Dokumen"))
+    // Setup mock response for this specific test
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("Generated Content"))
+            controller.close()
+          },
+        }),
+      })
+    ) as jest.Mock
+    
+    // Click the "Buat Dokumen" button
+    await act(async () => {
+      fireEvent.click(screen.getByText("Buat Dokumen"))
+    })
 
-    // Pastikan ada loading text sebelum dokumen muncul
-    expect(
-      await screen.findByText("⏳ Generating document...")
-    ).toBeInTheDocument()
-
-    // Tunggu hasil dokumen muncul setelah simulasi 3 detik
-    await waitFor(
-      () => {
+    // Wait for loading message
+    await act(async () => {
+      await waitFor(() => {
         expect(
-          screen.getByText((content) =>
-            content.includes(
-              "📜 Your generated document content will appear here"
-            )
-          )
+          screen.getByText((text) => text.includes("Memulai pembuatan dokumen"))
         ).toBeInTheDocument()
-      },
-      { timeout: 5000 }
-    ) // Tambah timeout agar cukup waktu menunggu
+      })
+    })
 
-    // Pastikan textarea bisa diketik setelah dokumen dibuat
-    const commentBox = screen.getByPlaceholderText(
-      "Tambahkan komentar revisi..."
-    )
+    // Wait for the generated document to appear with the exact mock content
+    await act(async () => {
+      await waitFor(() => {
+        expect(screen.getByText("Generated Content")).toBeInTheDocument()
+      })
+    })
+
+    // Ensure the comment box is enabled
+    const commentBox = screen.getByPlaceholderText("Tambahkan komentar revisi...")
     expect(commentBox).not.toBeDisabled()
-  })
+  }, 15000)
 
   it("disables comment input and retry button before document is generated", () => {
     render(<LegalDocumentsPage />)
@@ -121,23 +164,32 @@ describe("LegalDocumentsPage Component", () => {
 
   it("enables retry button after generating a document", async () => {
     render(<LegalDocumentsPage />)
+    
+    // Setup mock response for this specific test
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("Generated Content"))
+            controller.close()
+          },
+        }),
+      })
+    ) as jest.Mock
 
-    // Klik tombol Buat Dokumen (updated from Hasilkan Dokumen)
+    // Klik tombol Buat Dokumen
     fireEvent.click(screen.getByText("Buat Dokumen"))
 
-    // Tunggu hingga teks muncul (gunakan fungsi matcher)
+    // Wait for the generated content to appear
     await waitFor(
       () => {
-        expect(
-          screen.getByText((content) =>
-            content.includes("Your generated document content")
-          )
-        ).toBeInTheDocument()
+        expect(screen.getByText("Generated Content")).toBeInTheDocument()
       },
       { timeout: 5000 }
-    ) // Tambah timeout agar cukup waktu menunggu
+    )
 
-    // Pastikan tombol "Coba Buat Ulang" aktif
+    // Ensure "Coba Buat Ulang" button is enabled
     expect(
       screen.getByRole("button", { name: /coba buat ulang/i })
     ).not.toBeDisabled()
@@ -145,28 +197,44 @@ describe("LegalDocumentsPage Component", () => {
 
   it("clears the document preview when retry button is clicked", async () => {
     render(<LegalDocumentsPage />)
+    
+    // Setup mock response for this specific test
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("Generated Content"))
+            controller.close()
+          },
+        }),
+      })
+    ) as jest.Mock
 
-    // Klik tombol Buat Dokumen (updated from Hasilkan Dokumen)
+    // Generate document first
     fireEvent.click(screen.getByText("Buat Dokumen"))
 
-    // Tunggu dokumen muncul
+    // Wait for document to appear
     await waitFor(
       () => {
-        expect(
-          screen.getByText((content) =>
-            content.includes("Your generated document content")
-          )
-        ).toBeInTheDocument()
+        expect(screen.getByText("Generated Content")).toBeInTheDocument()
       },
       { timeout: 5000 }
     )
 
-    // Klik tombol "Coba Buat Ulang"
+    // Mock the window.confirm to return true
+    window.confirm = jest.fn().mockImplementation(() => true);
+
+    // Click retry button
     fireEvent.click(screen.getByRole("button", { name: /coba buat ulang/i }))
 
-    // Tunggu hingga teks berubah menjadi default
+    // Verify document is cleared - check for default state
+    // Using waitFor because state changes might be asynchronous
     await waitFor(() => {
-      expect(screen.getByText("⏳ Generating document...")).toBeInTheDocument()
-    })
+      const defaultText = screen.getByText((text) => 
+        text.includes("Generated document will show here")
+      );
+      expect(defaultText).toBeInTheDocument();
+    });
   })
 })
