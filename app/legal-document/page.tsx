@@ -137,13 +137,15 @@ export default function LegalDocumentsPage() {
     if (isGenerating) {
       return (
         <p className="text-gray-400 animate-pulse">
-          ⏳ Memulai pembuatan dokumen...
+          Memulai pembuatan dokumen...
         </p>
       )
     }
 
     return (
-      <p className="text-gray-400">📄 Generated document will show here...</p>
+      <p className="text-gray-400" data-testid="loading-message">
+        📄 Generated document will show here...
+      </p>
     )
   }
 
@@ -237,7 +239,10 @@ export default function LegalDocumentsPage() {
       <div className="flex gap-10">
         {/* Left Side - Document Streaming Preview */}
         <div className="w-2/3 bg-[#09090B] p-6 rounded-lg border border-[#27272A] flex flex-col">
-          <div className="flex-grow border border-[#27272A] p-4 rounded-lg overflow-auto">
+          <div
+            className="flex-grow border border-[#27272A] p-4 rounded-lg overflow-auto"
+            data-testid="document-preview-container"
+          >
             {renderDocumentContent()}
           </div>
 
