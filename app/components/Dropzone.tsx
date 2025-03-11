@@ -42,12 +42,12 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      const response = await axios.post("http://localhost:8000/upload/", formData, {
+      const response = await axios.post("${process.env.NEXT_PUBLIC_API_URL}/upload/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       if (response.status === 200) {
         const uploadedPath = response.data.file_path;
-        setPdfUrl(`http://localhost:8000/stream/${uploadedPath}`);
+        setPdfUrl(`${process.env.NEXT_PUBLIC_API_URL}/stream/${uploadedPath}`);
       }
     } catch (error) {
       console.error("Upload failed:", error);

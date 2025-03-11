@@ -70,7 +70,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
       console.log("🔍 Fixed filename:", filename);
 
       // Download file from backend
-      const response = await axios.get(`http://localhost:8000/download/${filename}`, {
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/download/${filename}`, {
         responseType: "blob",
       });
 
@@ -86,7 +86,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
 
       console.log("🚀 Sending file to /analyze/ API:", filename.split("/").pop());
 
-      const analyzeResponse = await axios.post("http://localhost:8000/analyze/", formData, {
+      const analyzeResponse = await axios.post("${process.env.NEXT_PUBLIC_API_URL}/analyze/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 

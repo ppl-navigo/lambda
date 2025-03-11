@@ -8,7 +8,7 @@ jest.mock("axios");
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe("MarkdownViewer component", () => {
-  const dummyPdfUrl = "http://localhost:8000/stream/uploads/test.pdf";
+  const dummyPdfUrl = "${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf";
 
   // Create a dummy blob response with an arrayBuffer method.
   const dummyBlob = new Blob(["dummy content"], { type: "application/pdf" });

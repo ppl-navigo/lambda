@@ -96,13 +96,13 @@ describe("Dropzone Component", () => {
     });
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        "http://localhost:8000/upload/",
+        "${process.env.NEXT_PUBLIC_API_URL}/upload/",
         expect.any(FormData),
         expect.objectContaining({
           headers: { "Content-Type": "multipart/form-data" },
         })
       );
-      expect(setPdfUrl).toHaveBeenCalledWith("http://localhost:8000/stream/uploaded.pdf");
+      expect(setPdfUrl).toHaveBeenCalledWith("${process.env.NEXT_PUBLIC_API_URL}/stream/uploaded.pdf");
     });
   });
 
