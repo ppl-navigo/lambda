@@ -13,6 +13,12 @@ import {
 
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 
+interface Pihak {
+  nama: string;
+  hak_pihak: string[];
+  kewajiban_pihak: string[];
+}
+
 export default function LegalDocumentsPage() {
   const [generatedDocument, setGeneratedDocument] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -58,48 +64,56 @@ export default function LegalDocumentsPage() {
       console.log("Sending data to API:", apiData)
 
       // Make API call with streaming enabled
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/legal-docs-generator/generate`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(apiData),
-        }
-      )
+      const promptText = [
+        `Jenis Kontrak: ${apiData.jenis_kontrak}`,
+        `Judul: ${apiData.judul}`,
+        `Tujuan: ${apiData.tujuan}`,
+        "",
+        "Pihak:",
+        (apiData.pihak as Pihak[])
+          .map(
+            (pihak) =>
+              `- ${pihak.nama}\n  Hak: ${pihak.hak_pihak.join(", ")}\n  Kewajiban: ${pihak.kewajiban_pihak.join(", ")}`
+          )
+          .join("\n"),
+        "",
+        `Mulai Kerja Sama: ${apiData.mulai_kerja_sama}`,
+        `Akhir Kerja Sama: ${apiData.akhir_kerja_sama}`,
+        `Pemecah Masalah: ${apiData.pemecah_masalah}`,
+        `Komentar: ${apiData.comment || "Tidak ada"}`,
+        `Author: ${apiData.author}`
+      ].join("\n");
 
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`)
+      // Make API call with streaming enabled
+      const res = await fetch("/api/legal-document", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ promptText }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch the generated document");
       }
 
-      if (!response.body) {
-        throw new Error("ReadableStream not supported")
+      if (!res.body) {
+        throw new Error("ReadableStream not supported in this browser.");
       }
 
-      // Set up streaming processing
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let done = false;
 
-      // Process the stream
-      while (true) {
-        const { done, value } = await reader.read()
-
-        if (done) {
-          break
-        }
-
-        // Decode the chunk and append to document
-        const chunk = decoder.decode(value, { stream: true })
-
-        // Process chunk character by character for visible streaming effect
-        for (let i = 0; i < chunk.length; i += 3) {
-          // Process 3 characters at a time
-          const subChunk = chunk.substring(i, Math.min(i + 3, chunk.length))
-          setGeneratedDocument((prev) => prev + subChunk)
-
-          // Small delay to make the streaming effect more visible
-          await new Promise((resolve) => setTimeout(resolve, 5))
+      // Read the streamed data and update the document state as chunks arrive
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value);
+          // SSE protocol: Remove all occurrences of "data:" and trim extra whitespace/newlines
+          const cleanedChunk = chunk.replace(/data:\s*/g, "").trim();
+          setGeneratedDocument((prev) => prev + cleanedChunk);
         }
       }
     } catch (err) {
