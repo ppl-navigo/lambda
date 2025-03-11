@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,13 @@ import {
 import { Calendar } from "@/components/ui/calendar"
 
 interface DocumentFormProps {
-  onGenerate: () => void
+  onGenerate: (formData: unknown) => void
+  documentType?: string
+}
+
+interface Party {
+  id: string
+  customName: string
 }
 
 const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
@@ -22,7 +28,10 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
   const [tujuan, setTujuan] = useState("")
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [endDate, setEndDate] = useState<Date | null>(null)
-  const [parties, setParties] = useState(["Pihak 1", "Pihak 2"])
+  const [parties, setParties] = useState<Party[]>([
+    { id: "Pihak 1", customName: "" },
+    { id: "Pihak 2", customName: "" },
+  ])
   const [rights, setRights] = useState<{ [key: string]: string[] }>({
     "Pihak 1": [""],
     "Pihak 2": [""],
@@ -32,6 +41,18 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
     "Pihak 2": [""],
   })
   const [errorMessage, setErrorMessage] = useState("")
+
+  // Listen for regenerate document event
+  useEffect(() => {
+    const handleRegenerate = () => {
+      handleSubmit()
+    }
+
+    document.addEventListener("regenerateDocument", handleRegenerate)
+    return () => {
+      document.removeEventListener("regenerateDocument", handleRegenerate)
+    }
+  }, [judul, tujuan, parties, rights, obligations, startDate, endDate])
 
   const handleEndDateChange = (date: Date | undefined) => {
     if (startDate && date && date < startDate) {
@@ -44,10 +65,10 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
 
   // Tambahkan pihak baru
   const addParty = () => {
-    const newParty = `Pihak ${parties.length + 1}`
-    setParties([...parties, newParty])
-    setRights({ ...rights, [newParty]: [""] })
-    setObligations({ ...obligations, [newParty]: [""] })
+    const newPartyId = `Pihak ${parties.length + 1}`
+    setParties([...parties, { id: newPartyId, customName: "" }])
+    setRights({ ...rights, [newPartyId]: [""] })
+    setObligations({ ...obligations, [newPartyId]: [""] })
   }
 
   // Update Hak & Kewajiban
@@ -62,6 +83,7 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
     updatedObligations[index] = value
     setObligations({ ...obligations, [party]: updatedObligations })
   }
+
   // Tambahkan Hak/Kewajiban baru
   const addRight = (party: string) => {
     setRights({ ...rights, [party]: [...rights[party], ""] })
@@ -81,6 +103,63 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
     const updatedObligations = obligations[party].filter((_, i) => i !== index)
     setObligations({ ...obligations, [party]: updatedObligations })
   }
+
+  // Form submission handler
+  const handleSubmit = () => {
+    // Basic form validation
+    if (!judul.trim()) {
+      alert("Judul dokumen tidak boleh kosong")
+      return
+    }
+
+    if (!tujuan.trim()) {
+      alert("Tujuan kerjasama tidak boleh kosong")
+      return
+    }
+
+    // Check if at least one party has a name
+    const hasNamedParty = parties.some(
+      (party) => party.customName.trim() !== ""
+    )
+    if (!hasNamedParty) {
+      alert("Setidaknya satu pihak harus memiliki nama")
+      return
+    }
+
+    // Prepare and submit form data
+    const formData = {
+      judul,
+      tujuan,
+      parties,
+      rights,
+      obligations,
+      startDate,
+      endDate,
+    }
+
+    onGenerate(formData)
+  }
+
+  // Form reset handler
+  const resetForm = () => {
+    setJudul("")
+    setTujuan("")
+    setStartDate(null)
+    setEndDate(null)
+    setParties([
+      { id: "Pihak 1", customName: "" },
+      { id: "Pihak 2", customName: "" },
+    ])
+    setRights({
+      "Pihak 1": [""],
+      "Pihak 2": [""],
+    })
+    setObligations({
+      "Pihak 1": [""],
+      "Pihak 2": [""],
+    })
+  }
+
   return (
     <div className="p-8 bg-[#09090B] text-white rounded-md border border-[#27272A] w-[495px]">
       {/* Judul */}
@@ -102,7 +181,10 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
 
       {/* Tujuan */}
       <div className="mb-4">
-        <label  htmlFor="tujuan" className="block text-lg font-semibold text-[#FAFAFA] mb-2">
+        <label
+          htmlFor="tujuan"
+          className="block text-lg font-semibold text-[#FAFAFA] mb-2"
+        >
           Tujuan
         </label>
         <Textarea
@@ -165,76 +247,48 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
         <h3 className="text-lg font-semibold text-[#FAFAFA] mb-2">
           Pihak-Pihak
         </h3>
-        {parties.map((party, index) => (
+        {parties.map((party, idx) => (
           <Input
-            key={index}
-            value={party.startsWith("Pihak") ? "" : party} // Hapus teks default saat diketik
+            key={party.id}
+            value={party.customName}
             onChange={(e) => {
               const updatedParties = [...parties]
-              const oldPartyName = parties[index]
-              const newPartyName = e.target.value || `Pihak ${index + 1}`
-
-              updatedParties[index] = newPartyName
-
-              // Perbarui key di rights & obligations
-              const updatedRights = { ...rights }
-              const updatedObligations = { ...obligations }
-
-              if (oldPartyName !== newPartyName) {
-                updatedRights[newPartyName] = updatedRights[oldPartyName] || [
-                  "",
-                ]
-                updatedObligations[newPartyName] = updatedObligations[
-                  oldPartyName
-                ] || [""]
-                delete updatedRights[oldPartyName]
-                delete updatedObligations[oldPartyName]
-              }
-
+              updatedParties[idx].customName = e.target.value
               setParties(updatedParties)
-              setRights(updatedRights)
-              setObligations(updatedObligations)
             }}
             className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA] mb-2"
-            placeholder={`Pihak ${index + 1}`}
+            placeholder={`${party.id} : Nama atau Organisasi`}
           />
         ))}
-
-        {parties.length > 2 ? (
-          <div className="flex gap-2 mt-2">
-            <Button
-              className="flex-1 bg-white text-black hover:bg-gray-300"
-              onClick={addParty}
-            >
-              Tambahkan Pihak
-            </Button>
-            <Button
-              className="flex-1 bg-red-600 text-white hover:bg-red-700"
-              onClick={() => {
-                const updatedParties = parties.slice(0, -1)
-                const removedParty = parties[parties.length - 1]
-
-                const updatedRights = { ...rights }
-                const updatedObligations = { ...obligations }
-                delete updatedRights[removedParty]
-                delete updatedObligations[removedParty]
-
-                setParties(updatedParties)
-                setRights(updatedRights)
-                setObligations(updatedObligations)
-              }}
-            >
-              Hapus Pihak
-            </Button>
-          </div>
-        ) : (
+        <div className="flex gap-2">
           <Button
-            className="w-full mt-2 bg-white text-black hover:bg-gray-300"
+            className="flex-1 mt-2 bg-white text-black hover:bg-gray-300"
             onClick={addParty}
           >
             Tambahkan Pihak
           </Button>
-        )}
+          <Button
+            className="flex-1 mt-2 bg-red-500 text-white hover:bg-red-600"
+            onClick={() => {
+              if (parties.length <= 2) return
+              const lastParty = parties[parties.length - 1]
+              const newParties = parties.slice(0, -1)
+              setParties(newParties)
+
+              // Remove rights and obligations for the deleted party
+              const newRights = { ...rights }
+              delete newRights[lastParty.id]
+              setRights(newRights)
+
+              const newObligations = { ...obligations }
+              delete newObligations[lastParty.id]
+              setObligations(newObligations)
+            }}
+            disabled={parties.length <= 2}
+          >
+            Hapus Pihak
+          </Button>
+        </div>
       </div>
 
       {/* Hak & Kewajiban */}
@@ -242,86 +296,97 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
       <hr className="border-[#27272A] mt-8 mb-4" />
 
       {parties.map((party) => (
-        <div key={party} className="mt-6">
-          <h3 className="text-lg font-semibold mb-1">{party}</h3>
+        <div key={party.id} className="mt-6">
+          <h3 className="text-lg font-semibold mb-1">
+            {party.id}
+            {party.customName ? ` : ${party.customName}` : ""}
+          </h3>
 
           {/* Hak */}
-          <label className="text-[#FAFAFA] block mt-1 mb-2">Hak</label>
-          {rights[party].map((right, idx) => (
-            <div key={idx} className="mb-2">
+          <label
+            htmlFor={`hak-${party.id}`}
+            className="text-[#FAFAFA] block mt-1 mb-2"
+          >
+            Hak
+          </label>
+          {rights[party.id]?.map((right, index) => (
+            <div key={`${party.id}-right-${index}`} className="flex gap-2 mb-2">
               <Input
-                className="bg-[#09090B] border border-[#27272A] text-white"
                 value={right}
-                onChange={(e) => updateRights(party, idx, e.target.value)}
+                onChange={(e) => updateRights(party.id, index, e.target.value)}
+                className="bg-[#09090B] text-white placeholder-[#A1A1AA] border border-[#27272A]"
+                placeholder="Hak Pihak"
               />
-            </div>
-          ))}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1 text-black hover:bg-gray-300"
-              onClick={() => addRight(party)}
-            >
-              Tambah Hak
-            </Button>
-            {rights[party].length > 1 && (
               <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() => removeRight(party, rights[party].length - 1)}
+                type="button"
+                onClick={() => removeRight(party.id, index)}
+                className="bg-red-500 text-white"
               >
                 Hapus Hak
               </Button>
-            )}
-          </div>
-
-          {/* Kewajiban */}
-          <label className="text-[#FAFAFA] block mt-4 mb-2">Kewajiban</label>
-          {obligations[party].map((obligation, idx) => (
-            <div key={idx} className="mb-2">
-              <Input
-                className="bg-[#09090B] border border-[#27272A] text-white"
-                value={obligation}
-                onChange={(e) => updateObligations(party, idx, e.target.value)}
-              />
             </div>
           ))}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1 text-black hover:bg-gray-300"
-              onClick={() => addObligation(party)}
+          <Button
+            onClick={() => addRight(party.id)}
+            className="w-full bg-[#27272A] text-white mt-2"
+          >
+            Tambah Hak
+          </Button>
+
+          {/* Kewajiban */}
+          <label
+            htmlFor={`kewajiban-${party.id}`}
+            className="text-[#FAFAFA] block mt-6 mb-2"
+          >
+            Kewajiban
+          </label>
+          {obligations[party.id]?.map((obligation, index) => (
+            <div
+              key={`${party.id}-obligation-${index}`}
+              className="flex gap-2 mb-2"
             >
-              Tambah Kewajiban
-            </Button>
-            {obligations[party].length > 1 && (
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() =>
-                  removeObligation(party, obligations[party].length - 1)
+              <Input
+                value={obligation}
+                onChange={(e) =>
+                  updateObligations(party.id, index, e.target.value)
                 }
+                className="bg-[#09090B] text-white placeholder-[#A1A1AA] border border-[#27272A]"
+                placeholder="Kewajiban Pihak"
+              />
+              <Button
+                type="button"
+                onClick={() => removeObligation(party.id, index)}
+                className="bg-red-500 text-white"
               >
                 Hapus Kewajiban
               </Button>
-            )}
-          </div>
-          {/* Garis batas */}
-          <hr className="border-[#27272A] mt-8 mb-4" />
+            </div>
+          ))}
+          <Button
+            onClick={() => addObligation(party.id)}
+            className="w-full bg-[#27272A] text-white mt-2"
+          >
+            Tambah Kewajiban
+          </Button>
         </div>
       ))}
 
-      {/* Tombol */}
-      <div className="flex justify-between mt-6">
-        <Button
-          className="bg-white text-black hover:bg-gray-300 w-40"
-          onClick={onGenerate}
-        >
-          Hasilkan Dokumen
-        </Button>
-        <Button className="bg-[#CBD5E1] text-black hover:bg-[#A3B6CC] w-40">
-          Simpan Dokumen
-        </Button>
+      <div className="mt-6">
+        <div className="flex gap-4">
+          <Button
+            className="flex-1 bg-black text-white hover:bg-black-700 border border-white"
+            onClick={resetForm}
+          >
+            Reset
+          </Button>
+          <Button
+            className="flex-1 bg-white text-black hover:bg-gray-300"
+            onClick={handleSubmit}
+            data-testid="generate-button"
+          >
+            Buat Dokumen
+          </Button>
+        </div>
       </div>
     </div>
   )
