@@ -23,6 +23,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "tests/qna/chat-frontend.spec.ts", "tests/e2e/qna/ChatPage.cy.js"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "tests/qna/chat-frontend.spec.ts", "tests/e2e/qna/ChatPage.cy.js", "jest.config.js"],
   "exclude": ["node_modules"]
 }
