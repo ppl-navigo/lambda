@@ -272,6 +272,7 @@ export default function LegalDocumentsPage() {
             }`}
             onClick={handleRetryGenerate}
             disabled={!generatedDocument || isGenerating}
+            data-testid="retry-button"
           >
             Coba Buat Ulang
           </button>
