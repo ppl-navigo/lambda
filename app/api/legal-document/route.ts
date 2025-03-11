@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
             },
         });
 
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error in /api/legal-document:", error);
         return new Response("Error generating text", { status: 500 });
     }
