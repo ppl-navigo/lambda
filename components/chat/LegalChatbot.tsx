@@ -104,11 +104,11 @@ export function LegalChatbot({
                                 )}
                             >
                                 {message.role === "assistant" ? (
-                                    <p className="prose dark:prose-invert">
+                                    <div className="prose dark:prose-invert">
                                         <MathpixMarkdown text={formatMessageWithCitations(message.content)}/>
-                                    </p>
+                                    </div>
                                 ) : (
-                                    <p className="prose dark:prose-invert">{message.content}</p>
+                                    <p className="prose">{message.content}</p>
                                 )}
                             </div>
                         ))}
@@ -144,5 +144,5 @@ export function LegalChatbot({
 }
 
 function formatMessageWithCitations(message: string): string {
-    return message.replace(/(\[\d+\])/g, '**$1**');
+    return message.replace(/\[\s*(\d+(?:\s*,\s*\d+)*)\s*\]/g, '**[$1]**');
 }
