@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest",
+    "test": "jest --coverage --coverageReporters=lcov",
     "test:ci": "jest --runInBand"
   },
   "dependencies": {
@@ -61,8 +61,6 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "ts-jest": "^29.2.6",
-    "ts-node": "^10.9.2",
-    "typescript": "^5",
-    "whatwg-fetch": "^3.6.20"
+    "ts-node": "^10.9.2"
   }
 }
