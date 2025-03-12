@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { FaSpinner } from "react-icons/fa";
-import ReactMarkdown from "react-markdown";
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
@@ -51,65 +50,79 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (pdfUrl) {
-      analyzeDocument(pdfUrl);
-    }
-  }, [pdfUrl]);
+    if (!pdfUrl) return;
 
-  const analyzeDocument = async (fileUrl: string) => {
-    setLoading(true);
-    setError("");
-    setRisks([]);
+    // Define async function inside useEffect to avoid dependency issues
+    const analyzeDocument = async (fileUrl: string) => {
+      setLoading(true);
+      setError("");
+      setRisks([]);
 
-    try {
-      let filename = fileUrl.split("/stream/")[1];
-      console.log("🔍 Original filename from pdfUrl:", filename);
+      try {
+        let filename = fileUrl.split("/stream/")[1];
+        console.log("🔍 Original filename from pdfUrl:", filename);
 
-      // Ensure correct file path format
-      filename = filename.replace("/^uploads\\/uploads\\//", "uploads/");
-      console.log("🔍 Fixed filename:", filename);
+        // Ensure correct file path format
+        filename = filename.replace("/^uploads\\/uploads\\//", "uploads/");
+        console.log("🔍 Fixed filename:", filename);
 
-      // Download file from backend
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/download/${filename}`, {
-        responseType: "blob",
-      });
+        // Download file from backend
+        const response = await axios.get(
+          `http://127.0.0.1:8000/download/${filename}`,
+          {
+            responseType: "blob",
+          }
+        );
 
-      // Create FormData to send file to the analyze API.
-      const formData = new FormData();
-      formData.append(
-        "file",
-        new Blob([await response.data.arrayBuffer()], {
-          type: "application/pdf",
-        }),
-        filename.split("/").pop() // Only file name
-      );
+        // Create FormData to send file to the analyze API.
+        const formData = new FormData();
+        formData.append(
+          "file",
+          new Blob([await response.data.arrayBuffer()], {
+            type: "application/pdf",
+          }),
+          filename.split("/").pop() // Only file name
+        );
 
-      console.log("🚀 Sending file to /analyze/ API:", filename.split("/").pop());
+        console.log(
+          "🚀 Sending file to /analyze/ API:",
+          filename.split("/").pop()
+        );
 
-      const analyzeResponse = await axios.post("${process.env.NEXT_PUBLIC_API_URL}/analyze/", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+        const analyzeResponse = await axios.post(
+          "http://127.0.0.1:8000/analyze/",
+          formData,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+          }
+        );
 
-      console.log("✅ Analysis response:", analyzeResponse.data);
+        console.log("✅ Analysis response:", analyzeResponse.data);
 
-      if (Array.isArray(analyzeResponse.data.risks)) {
-        const risksData: Risk[] = analyzeResponse.data.risks.map((risk: any) => ({
-          clause: cleanText(risk.clause),
-          risky_text: cleanText(risk.risky_text),
-          reason: cleanText(risk.reason),
-        }));
+        // Explicitly type the risk parameter instead of using any
+        if (Array.isArray(analyzeResponse.data.risks)) {
+          const risksData: Risk[] = analyzeResponse.data.risks.map(
+            (risk: { clause: string; risky_text: string; reason: string }) => ({
+              clause: cleanText(risk.clause),
+              risky_text: cleanText(risk.risky_text),
+              reason: cleanText(risk.reason),
+            })
+          );
 
-        setRisks(risksData);
-      } else {
-        setError("⚠️ Unexpected response format.");
+          setRisks(risksData);
+        } else {
+          setError("⚠️ Unexpected response format.");
+        }
+      } catch (error) {
+        console.error("❌ Analysis failed:", error);
+        setError("❌ Failed to analyze document. Please try again.");
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("❌ Analysis failed:", error);
-      setError("❌ Failed to analyze document. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    analyzeDocument(pdfUrl);
+  }, [pdfUrl]);
 
   const cleanText = (text: string) => {
     return text.replace(/\*\*/g, "").replace(/\n\s*\n/g, "\n").trim();
@@ -118,7 +131,10 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
   return (
     <div className="bg-[#1A1A1A] text-white p-4 rounded-md h-screen w-1/2 overflow-y-auto">
       {loading && (
-        <div className="flex items-center justify-center h-full" data-testid="spinner">
+        <div
+          className="flex items-center justify-center h-full"
+          data-testid="spinner"
+        >
           <FaSpinner className="text-4xl animate-spin" />
         </div>
       )}
