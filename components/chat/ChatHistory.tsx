@@ -25,7 +25,7 @@ interface ChatHistoryProps {
   onDeleteSession: (id: string) => void
 }
 
-export function ChatHistory({ sessions, currentSessionId, onSelectSession, onDeleteSession }: ChatHistoryProps) {
+export function ChatHistory({ sessions, currentSessionId, onSelectSession }: ChatHistoryProps) {
   // Sort sessions by updatedAt (most recent first)
   const sortedSessions = [...sessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 

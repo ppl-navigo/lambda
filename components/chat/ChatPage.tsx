@@ -136,7 +136,7 @@ export function ChatPage() {
     if (!isInitialLoad.current && chatSessions.length === 0) {
       createNewChat()
     }
-  }, [chatSessions.length])
+  }, [chatSessions.length, createNewChat])
 
   return (
     <div className="flex h-screen bg-background dark">
