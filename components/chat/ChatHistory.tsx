@@ -59,7 +59,7 @@ export function ChatHistory({ sessions, currentSessionId, onSelectSession, onDel
               className="opacity-0 group-hover:opacity-100 h-8 w-8"
               onClick={(e) => {
                 e.stopPropagation()
-                onDeleteSession(session.id)
+                // onDeleteSession(session.id)
               }}
             >
               <Trash2 className="h-4 w-4" />

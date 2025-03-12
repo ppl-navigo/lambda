@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
-import Navbar from "./components/Navbar"
+import { Navbar } from "@/components/layout/Navbar"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,11 +26,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#09090B] text-white`}
       >
-        {/* ✅ Navbar with proper padding */}
         <Navbar />
-
-        {/* ✅ Main Container to match shadcn layout */}
-        <main className="container mx-auto px-8 py-10 min-h-screen border border-[#27272A] rounded-md shadow-md">
+        <main className="min-h-screen">
           {children}
         </main>
       </body>

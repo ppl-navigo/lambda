@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { LegalChatbot } from "@/components/legal-chatbot"
-import { ChatHistory } from "@/components/chat-history"
+import { LegalChatbot } from "@/components/chat/LegalChatbot"
+import { ChatHistory } from "@/components/chat/ChatHistory"
 import { Button } from "@/components/ui/button"
 import { PanelLeft, Plus } from "lucide-react"
 
@@ -147,7 +147,7 @@ export function ChatPage() {
         } bg-muted transition-all duration-300 overflow-hidden flex flex-col h-full border-r`}
       >
         <div className="p-4 border-b">
-          <Button onClick={createNewChat} className="w-full" variant="outline">
+          <Button className="w-full" variant="outline">
             <Plus className="mr-2 h-4 w-4 text-white" /> 
             <span className="text-white">New Chat</span>
           </Button>
