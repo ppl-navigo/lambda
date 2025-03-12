@@ -18,15 +18,13 @@ const MouAnalyzer = () => {
 
       {/* Wrapper */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        {isSidebarVisible && (
-          <div className="h-full w-1/4">
-            <Sidebar
-              isSidebarVisible={isSidebarVisible}
-              setIsSidebarVisible={setIsSidebarVisible}
-            />
-          </div>
-        )}
+        {/* Always render Sidebar container */}
+        <div className="h-full w-1/8">
+          <Sidebar
+            isSidebarVisible={isSidebarVisible}
+            setIsSidebarVisible={setIsSidebarVisible}
+          />
+        </div>
 
         {/* Main Content Area */}
         <div className="flex flex-1 flex-col h-full overflow-hidden">
