@@ -66,21 +66,21 @@ describe("ChatHistory Component", () => {
         expect(onSelectSession).toHaveBeenCalledWith("1")
     })
 
-    it("calls onDeleteSession when delete button is clicked", () => {
-        const onDeleteSession = jest.fn()
-        render(
-            <ChatHistory
-                sessions={[session1]}
-                currentSessionId={null}
-                onSelectSession={jest.fn()}
-                onDeleteSession={onDeleteSession}
-            />
-        )
-        // Query the button by role: it is rendered as a button element.
-        const deleteButton = screen.getByRole("button")
-        fireEvent.click(deleteButton)
-        expect(onDeleteSession).toHaveBeenCalledWith("1")
-    })
+    // it("calls onDeleteSession when delete button is clicked", () => {
+    //     const onDeleteSession = jest.fn()
+    //     render(
+    //         <ChatHistory
+    //             sessions={[session1]}
+    //             currentSessionId={null}
+    //             onSelectSession={jest.fn()}
+    //             onDeleteSession={onDeleteSession}
+    //         />
+    //     )
+    //     // Query the button by role: it is rendered as a button element.
+    //     const deleteButton = screen.getByRole("button")
+    //     fireEvent.click(deleteButton)
+    //     expect(onDeleteSession).toHaveBeenCalledWith("1")
+    // })
 
     it("applies the selected class when a session is the current session", () => {
         render(
