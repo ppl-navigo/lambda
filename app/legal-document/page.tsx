@@ -13,6 +13,8 @@ import {
 
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 
+import { MathpixMarkdown, MathpixLoader } from 'mathpix-markdown-it';
+
 interface Pihak {
   nama: string;
   hak_pihak: string[];
@@ -56,9 +58,7 @@ export default function LegalDocumentsPage() {
         akhir_kerja_sama: formData.endDate
           ? formData.endDate.toISOString().split("T")[0]
           : null,
-        pemecah_masalah: "Arbitrase", // Default value, could be made customizable
-        comment: prompt,
-        author: "user@example.com", // This could come from auth context
+        comment: prompt
       }
 
       console.log("Sending data to API:", apiData)
@@ -79,9 +79,7 @@ export default function LegalDocumentsPage() {
         "",
         `Mulai Kerja Sama: ${apiData.mulai_kerja_sama}`,
         `Akhir Kerja Sama: ${apiData.akhir_kerja_sama}`,
-        `Pemecah Masalah: ${apiData.pemecah_masalah}`,
-        `Komentar: ${apiData.comment || "Tidak ada"}`,
-        `Author: ${apiData.author}`
+        `Komentar Revisi: ${apiData.comment || "Tidak ada"}`
       ].join("\n");
 
       // Make API call with streaming enabled
@@ -93,6 +91,8 @@ export default function LegalDocumentsPage() {
         body: JSON.stringify({ promptText }),
       });
 
+      console.log("API response:", promptText)
+      
       if (!res.ok) {
         throw new Error("Failed to fetch the generated document");
       }
@@ -144,12 +144,14 @@ export default function LegalDocumentsPage() {
 
     if (generatedDocument) {
       return (
-        <div className="whitespace-pre-wrap">
-          {generatedDocument}
-          {isGenerating && (
-            <span className="inline-block animate-pulse">▌</span>
-          )}
-        </div>
+        <MathpixLoader>
+          <div className="whitespace-pre-wrap">
+            <MathpixMarkdown text={generatedDocument}/>
+            {isGenerating && (
+              <span className="inline-block animate-pulse">▌</span>
+            )}
+          </div>
+        </MathpixLoader>
       )
     }
 
