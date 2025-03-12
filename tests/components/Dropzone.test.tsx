@@ -1,9 +1,10 @@
 import React from "react";
-import { render, fireEvent, waitFor, act, screen } from "@testing-library/react";
+import { render, fireEvent, waitFor, screen } from "@testing-library/react";
 import Dropzone from "../../app/components/Dropzone";
 import axios from "axios";
+import { useDropzone } from "react-dropzone";
 
-// Mock axios so that we can control its behavior.
+// Mock axios untuk API calls
 jest.mock("axios");
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -18,128 +19,124 @@ describe("Dropzone Component", () => {
 
   it("renders the dropzone when no file is selected", () => {
     render(<Dropzone {...defaultProps} />);
+    // Memastikan tampilan default dropzone muncul
     expect(
       screen.getByText(/Drag & drop a PDF here, or click to select one/i)
     ).toBeInTheDocument();
   });
 
   it("selects a valid PDF file and displays its name", async () => {
-    const { getByTestId, queryByText, container } = render(
-      <Dropzone {...defaultProps} />
-    );
-    const file = new File(["dummy content"], "test.pdf", {
-      type: "application/pdf",
-    });
-    const input = container.querySelector("input");
-    if (input) {
-      Object.defineProperty(input, "files", {
-        value: [file],
-      });
-      fireEvent.change(input);
-    }
+    render(<Dropzone {...defaultProps} />);
+    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
+
+    const file = new File(["dummy content"], "test.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { files: [file] } });
+
     await waitFor(() => {
-      expect(getByTestId("selected-file")).toHaveTextContent("test.pdf");
-      expect(queryByText("Only PDF files are allowed")).toBeNull();
+      expect(screen.getByTestId("selected-file")).toHaveTextContent("test.pdf");
     });
   });
 
-  it("deletes the selected file when 'Delete File' button is clicked", async () => {
-    const { getByTestId, getByText, queryByTestId, container } = render(
-      <Dropzone {...defaultProps} />
-    );
-    const file = new File(["dummy content"], "test.pdf", {
-      type: "application/pdf",
-    });
-    const input = container.querySelector("input");
-    if (input) {
-      Object.defineProperty(input, "files", {
-        value: [file],
-      });
-      fireEvent.change(input);
-    }
+  it("does nothing when no files are selected", async () => {
+    render(<Dropzone {...defaultProps} />);
+    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
+    // Simulasikan event change dengan FileList kosong
+    fireEvent.change(input, { target: { files: [] } });
     await waitFor(() => {
-      expect(getByTestId("selected-file")).toHaveTextContent("test.pdf");
+      // Karena tidak ada file yang diterima, tidak ada elemen selected-file yang muncul
+      expect(screen.queryByTestId("selected-file")).toBeNull();
     });
-    // Click the delete button.
-    const deleteButton = getByText("Delete File");
-    fireEvent.click(deleteButton);
+  });
+
+  it("shows drag active message when isDragActive is true", () => {
+    // Mock useDropzone untuk memaksa isDragActive menjadi true
+    jest.spyOn(require("react-dropzone"), "useDropzone").mockImplementation((options) => {
+      return {
+        getRootProps: () => ({}),
+        getInputProps: () => ({}),
+        isDragActive: true,
+      };
+    });
+    render(<Dropzone {...defaultProps} />);
+    expect(screen.getByText("Drop the PDF file here...")).toBeInTheDocument();
+    jest.restoreAllMocks();
+  });
+
+  it("deletes the selected file when 'X' button is clicked", async () => {
+    render(<Dropzone {...defaultProps} />);
+    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
+
+    const file = new File(["dummy content"], "test.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { files: [file] } });
+
     await waitFor(() => {
-      expect(queryByTestId("selected-file")).toBeNull();
+      expect(screen.getByTestId("selected-file")).toHaveTextContent("test.pdf");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("selected-file")).toBeNull();
     });
   });
 
   it("uploads a file and calls setPdfUrl on success", async () => {
-    // Mock a successful upload response.
     mockedAxios.post.mockResolvedValue({
       status: 200,
       data: { file_path: "uploaded.pdf" },
     });
-    const { getByTestId, getByText, container } = render(
-      <Dropzone {...defaultProps} />
-    );
-    const file = new File(["dummy content"], "test.pdf", {
-      type: "application/pdf",
-    });
-    const input = container.querySelector("input");
-    if (input) {
-      Object.defineProperty(input, "files", {
-        value: [file],
-      });
-      fireEvent.change(input);
-    }
+
+    render(<Dropzone {...defaultProps} />);
+    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
+
+    const file = new File(["dummy content"], "test.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { files: [file] } });
+
     await waitFor(() => {
-      expect(getByTestId("selected-file")).toHaveTextContent("test.pdf");
+      expect(screen.getByTestId("selected-file")).toHaveTextContent("test.pdf");
     });
-    const uploadButton = getByText("Upload");
-    await act(async () => {
-      fireEvent.click(uploadButton);
-    });
+
+    fireEvent.click(screen.getByText("Upload"));
+
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        "${process.env.NEXT_PUBLIC_API_URL}/upload/",
+        "http://127.0.0.1:8000/upload/",
         expect.any(FormData),
         expect.objectContaining({
           headers: { "Content-Type": "multipart/form-data" },
         })
       );
-      expect(setPdfUrl).toHaveBeenCalledWith("${process.env.NEXT_PUBLIC_API_URL}/stream/uploaded.pdf");
+      expect(setPdfUrl).toHaveBeenCalledWith("http://127.0.0.1:8000/stream/uploaded.pdf");
     });
-  });
-
-  it("does not render the upload button when no file is selected", () => {
-    const { queryByText } = render(<Dropzone {...defaultProps} />);
-    // Since no file is selected, the upload button should not be in the document.
-    expect(queryByText("Upload")).toBeNull();
   });
 
   it("handles upload failure gracefully", async () => {
-    // Simulate axios post failure
-    mockedAxios.post.mockRejectedValue(new Error("Upload error"));
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-    const { getByTestId, getByText, container } = render(
-      <Dropzone {...defaultProps} />
-    );
-    const file = new File(["dummy content"], "test.pdf", {
-      type: "application/pdf",
-    });
-    const input = container.querySelector("input");
-    if (input) {
-      Object.defineProperty(input, "files", {
-        value: [file],
-      });
-      fireEvent.change(input);
-    }
+
+    mockedAxios.post.mockRejectedValue(new Error("Upload error"));
+
+    render(<Dropzone {...defaultProps} />);
+    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
+
+    const file = new File(["dummy content"], "test.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { files: [file] } });
+
     await waitFor(() => {
-      expect(getByTestId("selected-file")).toHaveTextContent("test.pdf");
+      expect(screen.getByTestId("selected-file")).toHaveTextContent("test.pdf");
     });
-    const uploadButton = getByText("Upload");
-    await act(async () => {
-      fireEvent.click(uploadButton);
-    });
-    // On failure, setPdfUrl should not be called.
+
+    fireEvent.click(screen.getByText("Upload"));
+
     await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalled();
       expect(setPdfUrl).not.toHaveBeenCalled();
     });
+
     consoleErrorSpy.mockRestore();
+  });
+
+  it("does not render the upload button when no file is selected", () => {
+    render(<Dropzone {...defaultProps} />);
+    expect(screen.queryByText("Upload")).toBeNull();
   });
 });
