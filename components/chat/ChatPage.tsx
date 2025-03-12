@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { LegalChatbot } from "@/components/legal-chatbot"
-import { ChatHistory } from "@/components/chat-history"
+import { LegalChatbot } from "@/components/chat/LegalChatbot"
+import { ChatHistory } from "@/components/chat/ChatHistory"
 import { Button } from "@/components/ui/button"
 import { PanelLeft, Plus } from "lucide-react"
 
