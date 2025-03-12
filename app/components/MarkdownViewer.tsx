@@ -68,7 +68,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
 
         // Download file from backend
         const response = await axios.get(
-          `http://127.0.0.1:8000/download/${filename}`,
+          ` https://dev.api.navigoindonesia.app/download/${filename}`,
           {
             responseType: "blob",
           }
@@ -90,7 +90,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
         );
 
         const analyzeResponse = await axios.post(
-          "http://127.0.0.1:8000/analyze/",
+          " https://dev.api.navigoindonesia.app/analyze/",
           formData,
           {
             headers: { "Content-Type": "multipart/form-data" },

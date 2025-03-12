@@ -43,12 +43,12 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      const response = await axios.post("http://127.0.0.1:8000/upload/", formData, {
+      const response = await axios.post(" https://dev.api.navigoindonesia.app/upload/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       if (response.status === 200) {
         const uploadedPath = response.data.file_path;
-        setPdfUrl(`http://127.0.0.1:8000/stream/${uploadedPath}`);
+        setPdfUrl(` https://dev.api.navigoindonesia.app/stream/${uploadedPath}`);
       }
     } catch (error) {
       console.error("Upload failed:", error);
