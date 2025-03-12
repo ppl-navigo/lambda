@@ -52,7 +52,7 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
     return () => {
       document.removeEventListener("regenerateDocument", handleRegenerate)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [judul, tujuan, parties, rights, obligations, startDate, endDate])
 
   const handleEndDateChange = (date: Date | undefined) => {
