@@ -90,7 +90,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
         );
 
         const analyzeResponse = await axios.post(
-          "${process.env.NEXT_PUBLIC_API_URL}/analyze/",
+          `${process.env.NEXT_PUBLIC_API_URL}/analyze/`,
           formData,
           {
             headers: { "Content-Type": "multipart/form-data" },

@@ -32,7 +32,7 @@ describe("MarkdownViewer", () => {
       data: { risks: "not an array" },
     });
 
-    const pdfUrl = "${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf";
+    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
     render(<MarkdownViewer pdfUrl={pdfUrl} />);
 
     await waitFor(() => {
@@ -46,7 +46,7 @@ describe("MarkdownViewer", () => {
     // Simulate an error from axios.get.
     mockedAxios.get.mockRejectedValueOnce(new Error("Network error"));
 
-    const pdfUrl = "${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf";
+    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
     render(<MarkdownViewer pdfUrl={pdfUrl} />);
 
     await waitFor(() => {
@@ -71,7 +71,7 @@ describe("MarkdownViewer", () => {
       data: { risks: riskData },
     });
 
-    const pdfUrl = "${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf";
+    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
     render(<MarkdownViewer pdfUrl={pdfUrl} />);
 
     // Wait until loading is complete (spinner is removed).
@@ -122,7 +122,7 @@ describe("MarkdownViewer", () => {
       )
     );
 
-    const pdfUrl = "${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf";
+    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
     render(<MarkdownViewer pdfUrl={pdfUrl} />);
 
     // Immediately after render, the spinner should be visible.
