@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it"
-import { Navbar } from "@/components/layout/Navbar" // Import Navbar component
 
 interface Pihak {
   nama: string
@@ -171,7 +170,6 @@ export default function LegalDocumentsPage() {
 
   return (
     <>
-      <Navbar /> {/* Add Navbar at the top of the page */}
       <div className="min-h-screen bg-[#09090B] text-white p-10">
         {/* Header Section */}
         <div className="flex justify-between items-center mb-6">
