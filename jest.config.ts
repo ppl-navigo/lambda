@@ -1,8 +1,38 @@
-import { Config } from "jest"
+/**
+ * For a detailed explanation regarding each configuration property, visit:
+ * https://jestjs.io/docs/configuration
+ */
+
+import type { Config } from 'jest';
+import nextJest from "next/jest";
+
+const createJestConfig = nextJest({
+  dir: ".",
+});
 
 const config: Config = {
-  preset: "ts-jest",
+  clearMocks: true,
+  collectCoverage: true,
+  coverageDirectory: "coverage",
+  coverageProvider: "v8",
   testEnvironment: "jsdom",
+  preset: 'ts-jest',
+  coveragePathIgnorePatterns: [
+    "/components/ui/",
+    "/node_modules",
+    "/tests",
+    "/.next",
+    "/.vercel",
+    "/.github",
+    "/.vscode",
+    "/.git",
+    "/public",
+    "/cypress",
+    "/coverage",
+    "/dist",
+    "/.swc",
+    "/app/.*?/page\\.tsx",
+  ],
   transform: {
     "^.+\\.(ts|tsx)$": [
       "ts-jest",
@@ -14,19 +44,10 @@ const config: Config = {
   },
   transformIgnorePatterns: ["<rootDir>/node_modules/(?!(lucide-react)/)"],
   moduleNameMapper: {
-    "^@/components/ui/input$": "<rootDir>/components/ui/input",
-    "^@/components/ui/textarea$": "<rootDir>/components/ui/textarea",
-    "^@/components/ui/button$": "<rootDir>/components/ui/button",
-    "^@/components/ui/popover$": "<rootDir>/components/ui/popover",
-    "^@/components/ui/calendar$": "<rootDir>/components/ui/calendar",
-    "^@/components/ui/dropdown-menu$": "<rootDir>/components/ui/dropdown-menu",
-    "^@/components/ui/card$": "<rootDir>/components/ui/card",
-
-    "^@/lib/utils": "<rootDir>/lib/utils",
+    "^@/(.*)$": "<rootDir>/$1",
     "\\.(css|less|sass|scss)$": "<rootDir>/__mocks__/styleMock.js",
   },
   resolver: "<rootDir>/jest.resolver.js",
-
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
 }
 

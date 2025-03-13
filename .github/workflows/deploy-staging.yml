@@ -1,33 +1,26 @@
-name: Create vercel preview URL on pull request
+name: Deploy to vercel on merge to staging
 on:
-  pull_request:
+  push:
     branches:
-      - "*"
+      - staging
 
 jobs:
   build_and_deploy:
+    name: Build and analyze
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - run: npm instal
-      - name: Run tests
-        run: npm run test
       - uses: SonarSource/sonarqube-scan-action@v4
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       - uses: amondnet/vercel-action@v20
-        id: vercel-deploy
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           github-token: ${{ secrets.GH_TOKEN }}
-          vercel-org-id: ${{ secrets.ORG_ID }}
-          vercel-project-id: ${{ secrets.PROJECT_ID }}
-      - name: preview-url
-        run: |
-          echo ${{ steps.vercel-deploy.outputs.preview-url }}
+          vercel-args: '--prod'
+          vercel-org-id: ${{ secrets.ORG_ID_STAGING}}
+          vercel-project-id: ${{ secrets.PROJECT_ID_STAGING}}
