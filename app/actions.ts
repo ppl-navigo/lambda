@@ -8,6 +8,7 @@ type Message = {
   content: string
 }
 
+export const maxDuration = 60;
 export async function generateLegalResponse(userMessage: string, previousMessages: Message[]) {
   // Create a conversation history for context
   const conversationHistory = previousMessages
