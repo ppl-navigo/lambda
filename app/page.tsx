@@ -21,6 +21,7 @@ import { InsightItem } from "@/components/dashboard/InsightItem"
 
 export default function Dashboard() {
   return (
+    
     <div className="flex min-h-screen flex-col bg-black text-wrap">
       <main className="flex-1 p-4 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
