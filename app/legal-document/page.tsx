@@ -1,24 +1,21 @@
 "use client"
 import { useState } from "react"
 import DocumentForm from "../components/Form/DocumentForm"
-
 import { Button } from "@/components/ui/button"
-
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
 import { ChevronDown, MoreHorizontal } from "lucide-react"
-
-import { MathpixMarkdown, MathpixLoader } from 'mathpix-markdown-it';
+import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it"
+import { Navbar } from "@/components/layout/Navbar" // Import Navbar component
 
 interface Pihak {
-  nama: string;
-  hak_pihak: string[];
-  kewajiban_pihak: string[];
+  nama: string
+  hak_pihak: string[]
+  kewajiban_pihak: string[]
 }
 
 export default function LegalDocumentsPage() {
@@ -58,7 +55,7 @@ export default function LegalDocumentsPage() {
         akhir_kerja_sama: formData.endDate
           ? formData.endDate.toISOString().split("T")[0]
           : null,
-        comment: prompt
+        comment: prompt,
       }
 
       console.log("Sending data to API:", apiData)
@@ -73,14 +70,16 @@ export default function LegalDocumentsPage() {
         (apiData.pihak as Pihak[])
           .map(
             (pihak) =>
-              `- ${pihak.nama}\n  Hak: ${pihak.hak_pihak.join(", ")}\n  Kewajiban: ${pihak.kewajiban_pihak.join(", ")}`
+              `- ${pihak.nama}\n  Hak: ${pihak.hak_pihak.join(
+                ", "
+              )}\n  Kewajiban: ${pihak.kewajiban_pihak.join(", ")}`
           )
           .join("\n"),
         "",
         `Mulai Kerja Sama: ${apiData.mulai_kerja_sama}`,
         `Akhir Kerja Sama: ${apiData.akhir_kerja_sama}`,
-        `Komentar Revisi: ${apiData.comment || "Tidak ada"}`
-      ].join("\n");
+        `Komentar Revisi: ${apiData.comment || "Tidak ada"}`,
+      ].join("\n")
 
       // Make API call with streaming enabled
       const res = await fetch("/api/legal-document", {
@@ -89,31 +88,31 @@ export default function LegalDocumentsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ promptText }),
-      });
+      })
 
       console.log("API response:", promptText)
-      
+
       if (!res.ok) {
-        throw new Error("Failed to fetch the generated document");
+        throw new Error("Failed to fetch the generated document")
       }
 
       if (!res.body) {
-        throw new Error("ReadableStream not supported in this browser.");
+        throw new Error("ReadableStream not supported in this browser.")
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let done = false;
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder("utf-8")
+      let done = false
 
       // Read the streamed data and update the document state as chunks arrive
       while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
+        const { value, done: doneReading } = await reader.read()
+        done = doneReading
         if (value) {
-          const chunk = decoder.decode(value);
+          const chunk = decoder.decode(value)
           // SSE protocol: Remove all occurrences of "data:" and trim extra whitespace/newlines
-          const cleanedChunk = chunk.replace(/data:\s*/g, "").trim();
-          setGeneratedDocument((prev) => prev + cleanedChunk);
+          const cleanedChunk = chunk.replace(/data:\s*/g, "").trim()
+          setGeneratedDocument((prev) => prev + cleanedChunk)
         }
       }
     } catch (err) {
@@ -146,7 +145,7 @@ export default function LegalDocumentsPage() {
       return (
         <MathpixLoader>
           <div className="whitespace-pre-wrap">
-            <MathpixMarkdown text={generatedDocument}/>
+            <MathpixMarkdown text={generatedDocument} />
             {isGenerating && (
               <span className="inline-block animate-pulse">▌</span>
             )}
@@ -171,137 +170,144 @@ export default function LegalDocumentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white p-10">
-      {/* Header Section */}
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-[#FAFAFA] whitespace-nowrap">
-          Mulai Membuat Dokumen
-        </h2>
+    <>
+      <Navbar /> {/* Add Navbar at the top of the page */}
+      <div className="min-h-screen bg-[#09090B] text-white p-10">
+        {/* Header Section */}
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-[#FAFAFA] whitespace-nowrap">
+            Mulai Membuat Dokumen
+          </h2>
 
-        <div className="flex items-center gap-2">
-          {/* Dropdown Jenis Dokumen */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="flex items-center gap-2 px-4 py-2 border border-[#27272A] bg-[#09090B] hover:bg-gray-700 text-white"
+          <div className="flex items-center gap-2">
+            {/* Dropdown Jenis Dokumen */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2 px-4 py-2 border border-[#27272A] bg-[#09090B] hover:bg-gray-700 text-white"
+                >
+                  {selectedDocumentType}
+                  <ChevronDown className="w-4 h-4 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="bg-[#27272A] border border-gray-700 text-white rounded-md shadow-lg w-[200px]"
               >
-                {selectedDocumentType}
-                <ChevronDown className="w-4 h-4 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="bg-[#27272A] border border-gray-700 text-white rounded-md shadow-lg w-[200px]"
+                <DropdownMenuItem
+                  onClick={() => setSelectedDocumentType("MoU")}
+                >
+                  MoU
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSelectedDocumentType("Kontrak Kerja")}
+                >
+                  Kontrak Kerja
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    setSelectedDocumentType("Perjanjian Kerjasama")
+                  }
+                >
+                  Perjanjian Kerjasama
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Action Buttons */}
+            <Button
+              variant="outline"
+              className="border border-[#27272A] bg-[#27272A] hover:bg-gray-700 text-white"
+              disabled={!generatedDocument || isGenerating}
+              onClick={() => {
+                // Export functionality would be implemented here
+                alert("Download functionality to be implemented")
+              }}
             >
-              <DropdownMenuItem onClick={() => setSelectedDocumentType("MoU")}>
-                MoU
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSelectedDocumentType("Kontrak Kerja")}
-              >
-                Kontrak Kerja
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSelectedDocumentType("Perjanjian Kerjasama")}
-              >
-                Perjanjian Kerjasama
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Action Buttons */}
-          <Button
-            variant="outline"
-            className="border border-[#27272A] bg-[#27272A] hover:bg-gray-700 text-white"
-            disabled={!generatedDocument || isGenerating}
-            onClick={() => {
-              // Export functionality would be implemented here
-              alert("Download functionality to be implemented")
-            }}
-          >
-            Unduh
-          </Button>
-          <Button
-            variant="outline"
-            className="border border-[#27272A] bg-[#27272A] hover:bg-gray-700 text-white"
-            disabled={!generatedDocument || isGenerating}
-            onClick={() => {
-              // Share functionality would be implemented here
-              alert("Share functionality to be implemented")
-            }}
-          >
-            Bagikan
-          </Button>
-
-          {/* Dropdown menu button "..." */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-10 h-10 flex items-center justify-center border border-[#27272A] bg-[#27272A] hover:bg-gray-700"
-                data-testid="more-options-button"
-              >
-                <MoreHorizontal className="w-5 h-5 text-white" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="bg-[#27272A] border border-gray-700 text-white rounded-md shadow-lg w-40"
+              Unduh
+            </Button>
+            <Button
+              variant="outline"
+              className="border border-[#27272A] bg-[#27272A] hover:bg-gray-700 text-white"
+              disabled={!generatedDocument || isGenerating}
+              onClick={() => {
+                // Share functionality would be implemented here
+                alert("Share functionality to be implemented")
+              }}
             >
-              <DropdownMenuItem>Menu 1</DropdownMenuItem>
-              <DropdownMenuItem>Menu 2</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              Bagikan
+            </Button>
+
+            {/* Dropdown menu button "..." */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-10 h-10 flex items-center justify-center border border-[#27272A] bg-[#27272A] hover:bg-gray-700"
+                  data-testid="more-options-button"
+                >
+                  <MoreHorizontal className="w-5 h-5 text-white" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="bg-[#27272A] border border-gray-700 text-white rounded-md shadow-lg w-40"
+              >
+                <DropdownMenuItem>Menu 1</DropdownMenuItem>
+                <DropdownMenuItem>Menu 2</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex gap-10">
-        {/* Left Side - Document Streaming Preview */}
-        <div className="w-2/3 bg-[#09090B] p-6 rounded-lg border border-[#27272A] flex flex-col">
-          <div
-            className="flex-grow border border-[#27272A] p-4 rounded-lg overflow-auto"
-            data-testid="document-preview-container"
-          >
-            {renderDocumentContent()}
+        {/* Main Content */}
+        <div className="flex gap-10">
+          {/* Left Side - Document Streaming Preview */}
+          <div className="w-2/3 bg-[#09090B] p-6 rounded-lg border border-[#27272A] flex flex-col">
+            <div
+              className="flex-grow border border-[#27272A] p-4 rounded-lg overflow-auto"
+              data-testid="document-preview-container"
+            >
+              {renderDocumentContent()}
+            </div>
+
+            {/* General Prompting Box (Disabled initially and when generating) */}
+            <textarea
+              className={`mt-4 p-3 rounded-lg w-full border ${
+                generatedDocument && !isGenerating
+                  ? "bg-[#09090B] text-white border-[#27272A]"
+                  : "bg-gray-700 text-gray-500 border-[#27272A] cursor-not-allowed"
+              }`}
+              placeholder="Tambahkan komentar revisi..."
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              disabled={!generatedDocument || isGenerating}
+            ></textarea>
+            {/* Retry Button */}
+            <button
+              className={`mt-4 px-4 py-2 rounded-lg ${
+                !generatedDocument || isGenerating
+                  ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+                  : "bg-white text-gray-900 hover:bg-gray-300"
+              }`}
+              onClick={handleRetryGenerate}
+              disabled={!generatedDocument || isGenerating}
+              data-testid="retry-button"
+            >
+              Coba Buat Ulang
+            </button>
           </div>
 
-          {/* General Prompting Box (Disabled initially and when generating) */}
-          <textarea
-            className={`mt-4 p-3 rounded-lg w-full border ${
-              generatedDocument && !isGenerating
-                ? "bg-[#09090B] text-white border-[#27272A]"
-                : "bg-gray-700 text-gray-500 border-[#27272A] cursor-not-allowed"
-            }`}
-            placeholder="Tambahkan komentar revisi..."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={!generatedDocument || isGenerating}
-          ></textarea>
-          {/* Retry Button */}
-          <button
-            className={`mt-4 px-4 py-2 rounded-lg ${
-              !generatedDocument || isGenerating
-                ? "bg-gray-700 text-gray-500 cursor-not-allowed"
-                : "bg-white text-gray-900 hover:bg-gray-300"
-            }`}
-            onClick={handleRetryGenerate}
-            disabled={!generatedDocument || isGenerating}
-            data-testid="retry-button"
-          >
-            Coba Buat Ulang
-          </button>
-        </div>
-
-        {/* Right Side - Form */}
-        <div className="w-1/3">
-          <DocumentForm
-            onGenerate={handleGenerateDocument}
-            documentType={selectedDocumentType}
-          />
+          {/* Right Side - Form */}
+          <div className="w-1/3">
+            <DocumentForm
+              onGenerate={handleGenerateDocument}
+              documentType={selectedDocumentType}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
