@@ -1,4 +1,4 @@
-import { AlertCircle, Briefcase, Menu, Plus, Settings, User } from "lucide-react";
+import { AlertCircle, Menu, Plus, Settings, User } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import Image from "next/image";
