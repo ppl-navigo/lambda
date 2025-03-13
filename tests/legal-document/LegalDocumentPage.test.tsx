@@ -5,7 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react"
-import LegalDocumentsPage from "../../app/legal-document/page"
+import LegalDocumentsPage from "../../app/generate/page"
 import "@testing-library/jest-dom"
 import userEvent from "@testing-library/user-event"
 import { act } from "react"

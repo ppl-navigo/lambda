@@ -20,10 +20,10 @@ export function Navbar() {
           </Link>
         </div>
         <nav className="ml-6 hidden md:flex gap-4">
-        <Link href="/">
-          <Button variant="ghost" className="text-white h-8 px-2">
-            Dashboard
-          </Button>
+          <Link href="/">
+            <Button variant="ghost" className="text-white h-8 px-2">
+              Dashboard
+            </Button>
           </Link>
           <Link href="/generate">
             <Button variant="ghost" className="text-zinc-400 h-8 px-2">
