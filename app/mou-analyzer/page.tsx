@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import Dropzone from "../components/Dropzone";
 import Streamer from "../components/Streamer";
@@ -13,7 +12,7 @@ const MouAnalyzer = () => {
 
   return (
     <div className="bg-black text-white h-screen flex flex-col">
-      
+
       {/* Wrapper */}
       <div className="flex flex-1 overflow-hidden">
         {/* Always render Sidebar container */}
