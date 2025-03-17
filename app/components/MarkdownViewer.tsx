@@ -57,16 +57,10 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
     try {
     
       let filename = "";
-      if (!fileUrl.includes("/stream/")) {
-        // For testing or direct PDF links
-        console.log("No /stream/ found in URL, using fallback.");
-        const segments = fileUrl.split("/");
-        filename = segments[segments.length - 1] || "test.pdf";
-      } else {
-        filename = fileUrl.split("/stream/")[1];
-        // Only call `replace` on something that definitely exists:
-        filename = filename.replace("/^uploads\\/uploads\\//", "uploads/");
-      }
+    
+      filename = fileUrl.split("/stream/")[1];
+      // Only call `replace` on something that definitely exists:
+      filename = filename.replace("/^uploads\\/uploads\\//", "uploads/");
       
       console.log("📂 Extracted filename:", filename);
 
@@ -268,4 +262,5 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   );
 });
 
+MarkdownViewer.displayName = "MarkdownViewer";
 export default MarkdownViewer;

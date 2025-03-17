@@ -221,4 +221,59 @@ describe("MarkdownViewer (Simplified Tests)", () => {
       expect(screen.getByText(/gagal menganalisis dokumen/i)).toBeInTheDocument();
     });
   })
+
+  test("Handles DOCX file processing correctly", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyDocxBlob });
+    mockFetchSuccess();
+
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.docx" />);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+    await waitFor(() => expect(screen.getByText(/Risky Text/i)).toBeInTheDocument());
   });
+
+  test("Catches error during AI streaming and displays error message", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
+    mockFetchFail();
+
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+    await waitFor(() => expect(screen.getByText(/Gagal menganalisis dokumen/i)).toBeInTheDocument());
+  });
+
+  test("Handles missing PDF URL gracefully", async () => {
+    render(<MarkdownViewer pdfUrl={null} />);
+    expect(screen.getByText("No risks found.")).toBeInTheDocument();
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  test("Handles empty AI response correctly", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
+
+    global.fetch = jest.fn(async () => {
+      return {
+        body: {
+          getReader() {
+            return {
+              async read() {
+                return { done: true, value: undefined };
+              },
+            };
+          },
+        },
+      } as any;
+    });
+
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+    await waitFor(() => expect(screen.getByText(/Gagal menganalisis dokumen/i)).toBeInTheDocument());
+  });
+});
