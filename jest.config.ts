@@ -42,7 +42,7 @@ const config: Config = {
     ],
     "^.+\\.(js|jsx|mjs|cjs)$": "babel-jest", // Use Babel for JS/JSX
   },
-  transformIgnorePatterns: ["<rootDir>/node_modules/(?!(lucide-react)/)"],
+  transformIgnorePatterns: ["<rootDir>/node_modules/(?!(lucide-react|pdfjs-dist)/)"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
     "\\.(css|less|sass|scss)$": "<rootDir>/__mocks__/styleMock.js",
