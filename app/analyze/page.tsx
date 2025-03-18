@@ -12,7 +12,6 @@ const MouAnalyzer = () => {
 
   return (
     <div className="bg-black text-white h-screen flex flex-col">
-
       {/* Wrapper */}
       <div className="flex flex-1 overflow-hidden">
         {/* Always render Sidebar container */}
