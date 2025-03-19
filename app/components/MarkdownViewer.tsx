@@ -4,11 +4,11 @@ import { useState, useEffect } from "react";
 import React from "react";
 import axios from "axios";
 import { FaSpinner } from "react-icons/fa";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
+import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
 import { useCallback } from "react";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 
 interface MarkdownViewerProps {
