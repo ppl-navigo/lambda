@@ -10,6 +10,8 @@ import { generateLegalResponse } from "@/app/actions"
 import { cn } from "@/lib/utils"
 import { MathpixMarkdown, MathpixLoader } from 'mathpix-markdown-it';
 
+
+export const maxDuration = 60;
 export type Message = {
     role: "user" | "assistant"
     content: string
