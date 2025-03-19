@@ -1,9 +1,10 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "module": "CommonJS",
-    "jsx": "react-jsx",
-    "esModuleInterop": true,
-    "allowJs": true
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+      "module": "CommonJS",
+      "jsx": "react-jsx",
+      "esModuleInterop": true,
+      "allowJs": true
+    }
   }
-}
+  

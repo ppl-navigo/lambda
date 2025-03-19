@@ -44,7 +44,9 @@ describe("DocumentForm Component", () => {
     const addPartyButton = screen.getByText("Tambahkan Pihak")
     fireEvent.click(addPartyButton)
 
-    expect(screen.getByPlaceholderText("Pihak 3")).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).toBeInTheDocument()
   })
 
   it("removes the last party when 'Hapus Pihak' is clicked", () => {
@@ -52,21 +54,46 @@ describe("DocumentForm Component", () => {
 
     const addPartyButton = screen.getByText("Tambahkan Pihak")
     fireEvent.click(addPartyButton) // Adds Pihak 3
-    expect(screen.getByPlaceholderText("Pihak 3")).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).toBeInTheDocument()
 
     const removePartyButton = screen.getByText("Hapus Pihak")
     fireEvent.click(removePartyButton)
 
-    expect(screen.queryByPlaceholderText("Pihak 3")).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText("Pihak 3 : Nama atau Organisasi")
+    ).not.toBeInTheDocument()
   })
 
-  it("calls the onGenerate function when 'Hasilkan Dokumen' is clicked", () => {
+  it("calls the onGenerate function when 'Buat Dokumen' is clicked", () => {
     const mockOnGenerate = jest.fn()
     render(<DocumentForm onGenerate={mockOnGenerate} />)
 
-    const generateButton = screen.getByText("Hasilkan Dokumen")
+    // Fill in required fields
+    // 1. Set the Judul (title)
+    const titleInput = screen.getByPlaceholderText("MoU ini tentang...")
+    fireEvent.change(titleInput, { target: { value: "Test Document Title" } })
+
+    // 2. Set the Tujuan (objective)
+    const objectiveInput = screen.getByPlaceholderText(
+      "Kenapa Anda membuat MoU ini?"
+    )
+    fireEvent.change(objectiveInput, {
+      target: { value: "Test Document Objective" },
+    })
+
+    // 3. Set a name for at least one party
+    const partyInput = screen.getByPlaceholderText(
+      "Pihak 1 : Nama atau Organisasi"
+    )
+    fireEvent.change(partyInput, { target: { value: "Test Party Name" } })
+
+    // Now click the generate button
+    const generateButton = screen.getByText("Buat Dokumen")
     fireEvent.click(generateButton)
 
+    // Check if onGenerate was called
     expect(mockOnGenerate).toHaveBeenCalled()
   })
 
