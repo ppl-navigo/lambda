@@ -10,6 +10,19 @@ jest.mock("mammoth", () => ({
   },
 }));
 
+jest.mock('react-markdown', () => {
+  return ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
+});
+
+jest.mock('remark-gfm', () => {
+  return () => null; // Simply return null or an empty component, as we are not testing its behavior
+});
+
+jest.mock('remark-breaks', () => {
+  return () => null; // Similarly, mock remark-breaks as an empty component
+});
+
+
 import MarkdownViewer from "@/app/components/MarkdownViewer";
 import { act } from 'react'; // Change this line to use act from react
 
@@ -36,14 +49,13 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 // ----------------------------------------------------------------
 // 3) Mock pdfjs-dist so we don't parse real PDFs
 // ----------------------------------------------------------------
-jest.mock("pdfjs-dist/legacy/build/pdf", () => ({
+jest.mock("pdfjs-dist", () => ({
   GlobalWorkerOptions: { workerSrc: "" },
   getDocument: jest.fn().mockReturnValue({
     promise: Promise.resolve({
       numPages: 1,
       getPage: async () => ({
         getTextContent: async () => ({
-          // A single line of text, so we can confirm PDF load
           items: [{ str: "Mock PDF page text content" }],
         }),
       }),
@@ -68,11 +80,11 @@ function mockFetchSuccess() {
                 return {
                   done: false,
                   value: new TextEncoder().encode(
-                    `data: {"choices":[{"delta":{"content":"Klausul 1: 'Risky Text'. Alasan: 'Some reason.'\\n"}}]}` // Simulate first chunk
+                    `**Klausul 1:** "Risky Text" **Alasan:** "Some reason."\n`
                   ),
                 };
               } else {
-                return { done: true, value: undefined }; // End of stream
+                return { done: true, value: undefined };
               }
             },
           };
@@ -124,10 +136,10 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     await act(async () => {
       render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
     });
-  
+    
     // Wait for the spinner to appear and then disappear
     await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
-  
+
     // Check if the risk item is displayed
     await waitFor(() => expect(screen.getByText(/Risky Text/i)).toBeInTheDocument());
   
