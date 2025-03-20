@@ -7,6 +7,9 @@ import { FaSpinner } from "react-icons/fa";
 import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
 import { useCallback } from "react";
+import ReactMarkdown from "react-markdown"; // Importing react-markdown
+import remarkGfm from "remark-gfm"; 
+import remarkBreaks from 'remark-breaks';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
@@ -128,56 +131,38 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       try {
         console.log(`🤖 AI Analysis Attempt ${attempt}...`);
   
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        // Make a request to the backend API instead of OpenAI API
+        const response = await fetch("/api/mou-analyzer", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${process.env.NEXT_PUBLIC_OPENROUTER_API_KEY}`
           },
           body: JSON.stringify({
-            model: "qwen/qwen2.5-vl-72b-instruct:free",
-            stream: true,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `Analisis dokumen berikut untuk mengidentifikasi klausul yang berpotensi berisiko bagi pihak kedua. Risiko mencakup, namun tidak terbatas pada:\n\n* Ketidakseimbangan hak dan kewajiban antara pihak pertama dan pihak kedua\n* Klausul pembatalan yang merugikan\n* Klausul pembayaran yang berpotensi memberatkan\n* Klausul tanggung jawab yang bisa menyebabkan kerugian sepihak\n* Klausul force majeure yang tidak melindungi kepentingan pihak kedua\n* Klausul ambigu atau multi-tafsir yang bisa disalahgunakan\n* Klausul lain yang dapat menyebabkan dampak hukum negatif bagi pihak kedua\n\nFormat hasil yang diharapkan:\nKlausul {nomor}: "{kalimat atau kata-kata berisiko}". Alasan: "{penjelasan mengapa klausul ini berisiko}".\n\nJika dokumen memiliki bahasa yang tidak dikenali, tampilkan pesan "Bahasa tidak didukung". Jika tidak ditemukan klausul berisiko, tampilkan pesan "Tidak ditemukan klausul yang dapat dianalisis". Jika terjadi kesalahan sistem, tampilkan pesan "Gagal menganalisis dokumen, coba lagi nanti".\n\nSetiap klausul yang ditandai harus memiliki minimal satu alasan mengapa klausul tersebut berisiko, tetapi jangan berikan rekomendasi perbaikan terlebih dahulu.\n\n${text}`
-                  }
-                ]
-              }
-            ]
-          })
+            promptText: text, // Send the text to the API
+          }),
         });
   
         if (!response.body) throw new Error("No stream body received");
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
 
+        // Reading and processing the stream
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          
-          // Extract AI-generated text from streamed JSON
-          const lines = chunk.split("\n");
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const jsonData = JSON.parse(line.replace("data: ", ""));
-                const contentDelta = jsonData?.choices?.[0]?.delta?.content || "";
-                accumulatedResponse += contentDelta;
-                setAiResponse(accumulatedResponse);
-              } catch (error) {
-                console.warn("⚠️ Failed to parse streamed data:", error);
-              }
-            }
-          }
-        }
+          if (done) break; // When the stream is done, stop reading
 
-        break;      
-  
+          // Decode the chunk and append it to the accumulated response
+          const chunk = decoder.decode(value, { stream: true });
+
+          // Directly append the chunk (which is plain text) to the accumulated response
+          accumulatedResponse += chunk
+          console.log("Received chunk:", chunk);
+          console.log(accumulatedResponse);
+          setAiResponse(accumulatedResponse); // Update the UI with the new content
+      }
+
+        break;
+
       } catch (error) {
         console.error(`❌ Error on attempt ${attempt}:`, error);
         if (attempt === MAX_RETRIES) {
@@ -187,7 +172,9 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
         }
       }
     }
-  
+
+    console.log(accumulatedResponse);
+
     if (!accumulatedResponse) {
       setError("❌ Gagal menganalisis dokumen: Tidak ada respons yang valid dari AI.");
       setLoading(false);
@@ -195,21 +182,21 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
     }
 
     // 🔹 Parse AI Response into Risks
-    const riskMatches = accumulatedResponse.matchAll(/Klausul\s+([\w\s().]+):\s*['\"]?(.*?)['\"]?\s*\.?\s*Alasan:\s*['\"]?(.*?)['\"]?(?:\n|$)/g);
+    const riskMatches = accumulatedResponse.matchAll(/\*\*Klausul\s+([\w\s().,]+):\*\*\s*['\"]?(.*)['\"]?\s*\.?\s*\*\*Alasan:\*\*\s*['\"]?(.*)['\"]?(?:\n|$)/g);
     const extractedRisks: Risk[] = Array.from(riskMatches, (match: RegExpMatchArray) => ({
       clause: cleanText(`Klausul ${match[1]}`),
       risky_text: cleanText(match[2]),
       reason: cleanText(match[3]),
     }));
-  
+
     console.log("⚠️ Extracted Risks:", extractedRisks);
-  
-    setRisks(extractedRisks.length ? extractedRisks : [{ 
-      clause: "N/A", 
-      risky_text: "Tidak ditemukan klausul berisiko", 
-      reason: "Dokumen tampak aman" 
+
+    setRisks(extractedRisks.length ? extractedRisks : [{
+      clause: "N/A",
+      risky_text: "Tidak ditemukan klausul berisiko",
+      reason: "Dokumen tampak aman"
     }]);
-  
+
     setLoading(false);
   }, []);
     
@@ -232,7 +219,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
     }, [pdfUrl, downloadFileAndExtractText, analyzeTextWithAI]);
 
   const cleanText = (text: string) => {
-    return text.replace(/\*\*/g, "").replace(/\n\s*\n/g, "\n").trim();
+    return text.replace(/\*\*/g, "").trim();
   };
   // Debounced useEffect
   useEffect(() => {
@@ -256,7 +243,13 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       </div>
       <div className="bg-gray-800 text-white p-4 rounded-md overflow-y-auto">
         <h3 className="text-lg font-semibold mb-2">AI Response:</h3>
-        <pre className="whitespace-pre-wrap text-sm">{aiResponse || "Waiting for AI response..."}</pre>
+        <ReactMarkdown
+          children={aiResponse || "Waiting for AI response..."}
+          remarkPlugins={[remarkGfm, remarkBreaks]}  // Add remark-breaks here
+          components={{
+            p: ({ node, ...props }) => <p className="text-sm" {...props} />
+          }}
+        />
       </div>
     </div>
   );
