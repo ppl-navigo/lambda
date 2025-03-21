@@ -1,44 +1,47 @@
-"use client"
-import { useState } from "react"
-import DocumentForm from "../components/Form/DocumentForm"
-import { Button } from "@/components/ui/button"
+"use client";
+import { useState } from "react";
+import DocumentForm from "../components/Form/DocumentForm";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ChevronDown, MoreHorizontal } from "lucide-react"
-import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it"
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it";
+import { set } from "date-fns";
 
 interface Pihak {
-  nama: string
-  hak_pihak: string[]
-  kewajiban_pihak: string[]
+  nama: string;
+  hak_pihak: string[];
+  kewajiban_pihak: string[];
 }
 
 export default function LegalDocumentsPage() {
-  const [generatedDocument, setGeneratedDocument] = useState("")
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [prompt, setPrompt] = useState("")
+  const [generatedDocument, setGeneratedDocument] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [prompt, setPrompt] = useState("");
   const [selectedDocumentType, setSelectedDocumentType] = useState(
     "Jenis Dokumen Hukum"
-  )
-  const [error, setError] = useState<string | null>(null)
+  );
+  const [error, setError] = useState<string | null>(null);
+  // Add state to store the last submitted form data
+  const [lastFormData, setLastFormData] = useState<any>(null);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleGenerateDocument = async (formData: any) => {
-    setIsGenerating(true)
-    setGeneratedDocument("")
-    setError(null)
-
+    setIsGenerating(true);
+    setError(null); // Reset error message sebelum memulai proses baru
+    // Store the form data for potential retry
+    setLastFormData(formData);
+    console.log("ini adalah pihak", formData.parties);
     try {
       // Transform form data to match API structure
       const apiData = {
         jenis_kontrak: selectedDocumentType,
         judul: formData.judul,
         tujuan: formData.tujuan,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pihak: formData.parties.map((party: any) => ({
           nama: party.customName || party.id,
           hak_pihak: formData.rights[party.id].filter(
@@ -55,11 +58,8 @@ export default function LegalDocumentsPage() {
           ? formData.endDate.toISOString().split("T")[0]
           : null,
         comment: prompt,
-      }
+      };
 
-      console.log("Sending data to API:", apiData)
-
-      // Make API call with streaming enabled
       const promptText = [
         `Jenis Kontrak: ${apiData.jenis_kontrak}`,
         `Judul: ${apiData.judul}`,
@@ -69,75 +69,92 @@ export default function LegalDocumentsPage() {
         (apiData.pihak as Pihak[])
           .map(
             (pihak) =>
-              `- ${pihak.nama}\n  Hak: ${pihak.hak_pihak.join(
-                ", "
-              )}\n  Kewajiban: ${pihak.kewajiban_pihak.join(", ")}`
+              `- ${pihak.nama}
+  Hak: ${pihak.hak_pihak.join(", ")}
+  Kewajiban: ${pihak.kewajiban_pihak.join(", ")}`
           )
           .join("\n"),
         "",
         `Mulai Kerja Sama: ${apiData.mulai_kerja_sama}`,
         `Akhir Kerja Sama: ${apiData.akhir_kerja_sama}`,
         `Komentar Revisi: ${apiData.comment || "Tidak ada"}`,
-      ].join("\n")
+      ].join("\n");
 
-      // Make API call with streaming enabled
       const res = await fetch("/api/legal-document", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ promptText }),
-      })
-
-      console.log("API response:", promptText)
+      });
 
       if (!res.ok) {
-        throw new Error("Failed to fetch the generated document")
+        const errorData = await res.json().catch(() => null);
+
+        if (errorData && errorData.error === "Duplicate prompt") {
+          throw new Error("Duplicate prompt detected");
+        }
+        throw new Error(`HTTP error! status: ${res.status}`);
       }
 
       if (!res.body) {
-        throw new Error("ReadableStream not supported in this browser.")
+        throw new Error("ReadableStream not supported in this browser.");
       }
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder("utf-8")
-      let done = false
-
-      // Read the streamed data and update the document state as chunks arrive
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let done = false;
+      setGeneratedDocument(""); // Reset generated document
       while (!done) {
-        const { value, done: doneReading } = await reader.read()
-        done = doneReading
-        if (value) {
-          const chunk = decoder.decode(value)
-          // SSE protocol: Remove all occurrences of "data:" and trim extra whitespace/newlines
-          const cleanedChunk = chunk.replace(/data:\s*/g, "").trim()
-          setGeneratedDocument((prev) => prev + cleanedChunk)
-        }
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        console.log("Received chunk awal:", value);
+        const chunk = decoder.decode(value);
+        const cleanedChunk = chunk.replace(/data:\s*/g, "").trim();
+        setGeneratedDocument((prev) => prev + cleanedChunk);
       }
     } catch (err) {
-      console.error("Failed to generate document:", err)
-      setError(
-        `Failed to generate document: ${
-          err instanceof Error ? err.message : "Unknown error"
-        }`
-      )
-      setGeneratedDocument("")
-    } finally {
-      setIsGenerating(false)
-    }
-  }
+      console.error("Failed to generate document:", err);
 
-  const handleRetryGenerate = () => {
-    // This will trigger the form to resubmit its current data
-    if (window.confirm("Are you sure you want to regenerate the document?")) {
-      setPrompt("")
-      document.dispatchEvent(new CustomEvent("regenerateDocument"))
+      // Tidak menghapus dokumen yang sudah di-generate
+      if (err instanceof Error && err.message === "Duplicate prompt detected") {
+        alert(
+          "Anda mengirimkan informasi yang sama, silakan tambahkan atau ubah informasi yang akan Anda kirimkan"
+        );
+      } else {
+        setError(
+          `Failed to generate document: ${
+            err instanceof Error ? err.message : "Unknown error"
+          }`
+        );
+      }
+
+      // Jangan reset generatedDocument di sini
+    } finally {
+      setIsGenerating(false);
     }
-  }
+  };
+
+  const handleRetryGenerate = async () => {
+    if (window.confirm("Apakah Anda yakin ingin membuat ulang dokumen?")) {
+      if (!prompt.trim()) {
+        alert("Komentar revisi tidak boleh kosong.");
+        return;
+      }
+      if (!lastFormData) {
+        alert("Tidak ada data formulir yang tersedia.");
+        return;
+      }
+      // Pass the stored form data to handleGenerateDocument
+      console.log("ini adalah pihak", lastFormData.parties);
+      await handleGenerateDocument(lastFormData);
+      setPrompt("");
+    }
+  };
 
   const renderDocumentContent = () => {
     if (error) {
-      return <p className="text-red-500">❌ {error}</p>
+      return <p className="text-red-500">❌ {error}</p>;
     }
 
     if (generatedDocument) {
@@ -150,7 +167,7 @@ export default function LegalDocumentsPage() {
             )}
           </div>
         </MathpixLoader>
-      )
+      );
     }
 
     if (isGenerating) {
@@ -158,15 +175,15 @@ export default function LegalDocumentsPage() {
         <p className="text-gray-400 animate-pulse">
           Memulai pembuatan dokumen...
         </p>
-      )
+      );
     }
 
     return (
       <p className="text-gray-400" data-testid="loading-message">
         📄 Generated document will show here...
       </p>
-    )
-  }
+    );
+  };
 
   return (
     <>
@@ -220,7 +237,7 @@ export default function LegalDocumentsPage() {
               disabled={!generatedDocument || isGenerating}
               onClick={() => {
                 // Export functionality would be implemented here
-                alert("Download functionality to be implemented")
+                alert("Download functionality to be implemented");
               }}
             >
               Unduh
@@ -231,7 +248,7 @@ export default function LegalDocumentsPage() {
               disabled={!generatedDocument || isGenerating}
               onClick={() => {
                 // Share functionality would be implemented here
-                alert("Share functionality to be implemented")
+                alert("Share functionality to be implemented");
               }}
             >
               Bagikan
@@ -285,12 +302,12 @@ export default function LegalDocumentsPage() {
             {/* Retry Button */}
             <button
               className={`mt-4 px-4 py-2 rounded-lg ${
-                !generatedDocument || isGenerating
+                !generatedDocument || isGenerating || !prompt.trim()
                   ? "bg-gray-700 text-gray-500 cursor-not-allowed"
                   : "bg-white text-gray-900 hover:bg-gray-300"
               }`}
               onClick={handleRetryGenerate}
-              disabled={!generatedDocument || isGenerating}
+              disabled={!generatedDocument || isGenerating || !prompt.trim()}
               data-testid="retry-button"
             >
               Coba Buat Ulang
@@ -307,5 +324,5 @@ export default function LegalDocumentsPage() {
         </div>
       </div>
     </>
-  )
+  );
 }
