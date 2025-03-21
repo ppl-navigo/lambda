@@ -4,15 +4,10 @@ import { useState, useEffect } from "react";
 import React from "react";
 import axios from "axios";
 import { FaSpinner } from "react-icons/fa";
-import * as pdfjsLib from "pdfjs-dist";
-import mammoth from "mammoth";
 import { useCallback } from "react";
 import ReactMarkdown from "react-markdown"; // Importing react-markdown
 import remarkGfm from "remark-gfm"; 
 import remarkBreaks from 'remark-breaks';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
-
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
@@ -58,61 +53,36 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
   const downloadFileAndExtractText = useCallback(async (fileUrl: string) => {
     try {
-    
-      let filename = "";
-    
-      filename = fileUrl.split("/stream/")[1];
-      // Only call `replace` on something that definitely exists:
-      filename = filename.replace("/^uploads\\/uploads\\//", "uploads/");
-      
-      console.log("📂 Extracted filename:", filename);
-
-      // Download file from backend
-      const response = await axios.get(
+      let filename = fileUrl.split("/stream/")[1];
+      filename = filename.replace(/^uploads\/uploads\//, "uploads/");
+  
+      console.log("📂 Using filename for text extraction:", filename);
+  
+      // Step 1: Download file from your own backend
+      const fileResponse = await axios.get(
         `${process.env.NEXT_PUBLIC_API_URL}/download/${filename}`,
         { responseType: "blob" }
       );
+  
+      const fileBlob = fileResponse.data;
+      const file = new File([fileBlob], filename);
+  
+      // Step 2: Upload it to the backend for extraction
+      const formData = new FormData();
+      formData.append("file", file);
 
-      console.log("✅ File downloaded successfully");
-
-      const fileBlob = await response.data.arrayBuffer();
-      const fileExtension = filename.split(".").pop()?.toLowerCase();
-      let extractedText = "";
-
-      if (fileExtension === "pdf") {
-        console.log("📄 Processing PDF file");
-        const typedArray = new Uint8Array(fileBlob);
-        console.log("📢 Before loading PDF...");
-
-        const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-        console.log("📢 Loading PDF...");
-
-        const pdf = await loadingTask.promise;
-        console.log("✅ PDF Loaded Successfully!");
-        console.log("📃 Total Pages:", pdf.numPages);
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          console.log(`📜 Page ${i} content items:`, content.items);
-          extractedText += content.items
-              .map((item) => ("str" in item ? item.str : ""))
-              .join(" ") + "\n";
-
-        }
-      } else if (fileExtension === "docx") {
-        console.log("📄 Processing DOCX file");
-        const result = await mammoth.extractRawText({ arrayBuffer: fileBlob });
-        extractedText = result.value;
-      } else {
-        throw new Error("Unsupported file format.");
-      }
-
-      console.log("📝 Extracted text:", extractedText.substring(0, 500)); // Log first 500 characters
+      const extractResponse = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/extract_text/`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+  
+      const extractedText = extractResponse.data.extracted_text;
+      console.log("📝 Extracted text from backend:", extractedText.substring(0, 500));
       return extractedText;
     } catch (error) {
-      console.error("❌ Error loading PDF:", error);
-      setError("❌ Error extracting text from file.");
+      console.error("❌ Error extracting text from backend:", error);
+      setError("❌ Error extracting text from backend.");
       return "";
     }
   }, []);
@@ -244,12 +214,13 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       <div className="bg-gray-800 text-white p-4 rounded-md overflow-y-auto">
         <h3 className="text-lg font-semibold mb-2">AI Response:</h3>
         <ReactMarkdown
-          children={aiResponse || "Waiting for AI response..."}
-          remarkPlugins={[remarkGfm, remarkBreaks]}  // Add remark-breaks here
+          remarkPlugins={[remarkGfm, remarkBreaks]}
           components={{
-            p: ({ node, ...props }) => <p className="text-sm" {...props} />
-          }}
-        />
+            p: (props) => <p className="text-sm" {...props} />,
+          }}          
+          >
+          {aiResponse || "Waiting for AI response..."}
+        </ReactMarkdown>
       </div>
     </div>
   );
