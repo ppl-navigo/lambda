@@ -2,14 +2,6 @@ import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import axios from "axios";
 
-// At the top of your test file, before the component import:
-jest.mock("mammoth", () => ({
-  __esModule: true,
-  default: {
-    extractRawText: jest.fn().mockResolvedValue({ value: "Mock extracted text from docx" }),
-  },
-}));
-
 jest.mock('react-markdown', () => {
   return ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
 });
@@ -41,27 +33,15 @@ jest.mock("axios", () => ({
   __esModule: true,
   default: {
     get: jest.fn(),
+    post: jest.fn(), // ✅ Add this
   },
 }));
+
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+mockedAxios.post = jest.fn().mockResolvedValue({
+  data: { extracted_text: "Mock extracted text from backend" },
+});
 
-
-// ----------------------------------------------------------------
-// 3) Mock pdfjs-dist so we don't parse real PDFs
-// ----------------------------------------------------------------
-jest.mock("pdfjs-dist", () => ({
-  GlobalWorkerOptions: { workerSrc: "" },
-  getDocument: jest.fn().mockReturnValue({
-    promise: Promise.resolve({
-      numPages: 1,
-      getPage: async () => ({
-        getTextContent: async () => ({
-          items: [{ str: "Mock PDF page text content" }],
-        }),
-      }),
-    }),
-  }),
-}));
 
 // ----------------------------------------------------------------
 // 4) Mock fetch (AI streaming) - we'll do different scenarios
@@ -105,11 +85,8 @@ function mockFetchFail() {
 // ----------------------------------------------------------------
 // 5) Create a dummy PDF blob. We'll re-use for "docx" too
 // ----------------------------------------------------------------
-const dummyPdfBlob = new Blob(["dummy pdf content"], { type: "application/pdf" });
-(dummyPdfBlob as any).arrayBuffer = async () => new ArrayBuffer(8);
-
-const dummyDocxBlob = new Blob(["dummy docx content"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-(dummyDocxBlob as any).arrayBuffer = async () => new ArrayBuffer(8);
+const dummyBlob = new Blob(["dummy content"], { type: "application/octet-stream" });
+(dummyBlob as any).arrayBuffer = async () => new ArrayBuffer(8);
 
 // ----------------------------------------------------------------
 // TESTS
@@ -129,7 +106,7 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     jest.setTimeout(15000);
   
     // Mock the axios and fetch functions
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
     mockFetchSuccess();
   
     // Wrap the render in act to handle async updates
@@ -156,7 +133,7 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     jest.setTimeout(15000);
 
     // Return docx blob
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyDocxBlob });
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
     mockFetchSuccess();
 
     // We'll pass a docx URL
@@ -174,25 +151,11 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     });
   });
 
-  test("4) Unsupported file format => shows '❌ Error extracting text from file.'", async () => {
-    // Return a .txt or .png => code should throw "Unsupported file format."
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
-
-    // We'll pass a .png so the code triggers "Unsupported file format."
-    render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/image.png" />);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("❌ Error extracting text from file.")
-      ).toBeInTheDocument();
-    });
-  });
-
   test("AI streaming success => we see risk items", async () => {
     jest.setTimeout(10000); // Increase timeout to avoid the default 5000ms timeout
   
     // Set up mock responses for both axios and fetch
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
     mockFetchSuccess();
   
     // Start the rendering process within act
@@ -218,7 +181,7 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     jest.setTimeout(10000); // Increase timeout to avoid default timeout
   
     // Set up mock for axios and a failing fetch
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
     mockFetchFail(); // Force the AI streaming to fail
   
     await act(async () => {
@@ -234,20 +197,8 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     });
   })
 
-  test("Handles DOCX file processing correctly", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyDocxBlob });
-    mockFetchSuccess();
-
-    await act(async () => {
-      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.docx" />);
-    });
-
-    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
-    await waitFor(() => expect(screen.getByText(/Risky Text/i)).toBeInTheDocument());
-  });
-
   test("Catches error during AI streaming and displays error message", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
     mockFetchFail();
 
     await act(async () => {
@@ -265,7 +216,7 @@ describe("MarkdownViewer (Simplified Tests)", () => {
   });
 
   test("Handles empty AI response correctly", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyPdfBlob });
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
 
     global.fetch = jest.fn(async () => {
       return {
@@ -288,4 +239,25 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
     await waitFor(() => expect(screen.getByText(/Gagal menganalisis dokumen/i)).toBeInTheDocument());
   });
+
+  test("Handles backend extraction error correctly", async () => {
+    // Mock the file download to succeed
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+  
+    // Simulate backend text extraction failing
+    mockedAxios.post.mockRejectedValueOnce(new Error("Extraction failed"));
+  
+    // Also mock fetch to avoid it interfering (since no text will be extracted anyway)
+    mockFetchSuccess();
+  
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+  
+    // Wait for the error to show up
+    await waitFor(() => {
+      expect(screen.getByText("❌ Error extracting text from backend.")).toBeInTheDocument();
+    });
+  });
+  
 });
