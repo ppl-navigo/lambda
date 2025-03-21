@@ -7,9 +7,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
-import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it";
+} from "@/components/ui/dropdown-menu"
+import { ChevronDown, MoreHorizontal } from "lucide-react"
+import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it"
+import Link from "next/link";
 
 interface Pihak {
   nama: string;
@@ -255,6 +256,15 @@ export default function LegalDocumentsPage() {
             >
               Bagikan
             </Button>
+            <Link href="/generate/history">
+              <Button
+                variant="outline"
+                className="border border-[#27272A] bg-[#27272A] hover:bg-gray-700 text-white"
+                disabled={isGenerating}
+              >
+                History
+              </Button>
+            </Link>
 
             {/* Dropdown menu button "..." */}
             <DropdownMenu>
