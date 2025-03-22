@@ -1,130 +1,166 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from "react"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Button } from "@/components/ui/button"
-import { CalendarIcon } from "lucide-react"
-import { format } from "date-fns"
+import React, { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 interface DocumentFormProps {
-  onGenerate: (formData: unknown) => void
-  documentType?: string
+  onGenerate: (formData: unknown) => void;
+  documentType?: string;
 }
 
 interface Party {
-  id: string
-  customName: string
+  id: string;
+  customName: string;
+  representativeName: string;
+  position: string;
+  phoneNumber: string;
+  address: string;
 }
 
 const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
-  const [judul, setJudul] = useState("")
-  const [tujuan, setTujuan] = useState("")
-  const [startDate, setStartDate] = useState<Date | null>(null)
-  const [endDate, setEndDate] = useState<Date | null>(null)
+  const [judul, setJudul] = useState("");
+  const [tujuan, setTujuan] = useState("");
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [disputeLocation, setDisputeLocation] = useState("");
   const [parties, setParties] = useState<Party[]>([
-    { id: "Pihak 1", customName: "" },
-    { id: "Pihak 2", customName: "" },
-  ])
+    {
+      id: "Pihak 1",
+      customName: "",
+      representativeName: "",
+      position: "",
+      phoneNumber: "",
+      address: "",
+    },
+    {
+      id: "Pihak 2",
+      customName: "",
+      representativeName: "",
+      position: "",
+      phoneNumber: "",
+      address: "",
+    },
+  ]);
   const [rights, setRights] = useState<{ [key: string]: string[] }>({
     "Pihak 1": [""],
     "Pihak 2": [""],
-  })
+  });
   const [obligations, setObligations] = useState<{ [key: string]: string[] }>({
     "Pihak 1": [""],
     "Pihak 2": [""],
-  })
-  const [errorMessage, setErrorMessage] = useState("")
+  });
+  const [errorMessage, setErrorMessage] = useState("");
 
   // Listen for regenerate document event
   useEffect(() => {
     const handleRegenerate = () => {
-      handleSubmit()
-    }
+      handleSubmit();
+    };
 
-    document.addEventListener("regenerateDocument", handleRegenerate)
+    document.addEventListener("regenerateDocument", handleRegenerate);
     return () => {
-      document.removeEventListener("regenerateDocument", handleRegenerate)
-    }
+      document.removeEventListener("regenerateDocument", handleRegenerate);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [judul, tujuan, parties, rights, obligations, startDate, endDate])
+  }, [judul, tujuan, parties, rights, obligations, startDate, endDate]);
+
+  const handleStartDateChange = (date: Date | undefined) => {
+    if (endDate && date && date > endDate) {
+      alert("Tanggal mulai tidak boleh setelah tanggal selesai.");
+      return;
+    }
+    setStartDate(date ?? null);
+  };
 
   const handleEndDateChange = (date: Date | undefined) => {
     if (startDate && date && date < startDate) {
-      setErrorMessage("Tanggal selesai tidak boleh sebelum tanggal mulai.")
-      return
+      alert("Tanggal selesai tidak boleh sebelum tanggal mulai.");
+      return;
     }
-    setErrorMessage("") // Clear error when valid
-    setEndDate(date ?? null)
-  }
+    setEndDate(date ?? null);
+  };
 
   // Tambahkan pihak baru
   const addParty = () => {
-    const newPartyId = `Pihak ${parties.length + 1}`
-    setParties([...parties, { id: newPartyId, customName: "" }])
-    setRights({ ...rights, [newPartyId]: [""] })
-    setObligations({ ...obligations, [newPartyId]: [""] })
-  }
+    const newPartyId = `Pihak ${parties.length + 1}`;
+    setParties([
+      ...parties,
+      {
+        id: newPartyId,
+        customName: "",
+        representativeName: "",
+        position: "",
+        phoneNumber: "",
+        address: "",
+      },
+    ]);
+    setRights({ ...rights, [newPartyId]: [""] });
+    setObligations({ ...obligations, [newPartyId]: [""] });
+  };
 
   // Update Hak & Kewajiban
   const updateRights = (party: string, index: number, value: string) => {
-    const updatedRights = [...rights[party]]
-    updatedRights[index] = value
-    setRights({ ...rights, [party]: updatedRights })
-  }
+    const updatedRights = [...rights[party]];
+    updatedRights[index] = value;
+    setRights({ ...rights, [party]: updatedRights });
+  };
 
   const updateObligations = (party: string, index: number, value: string) => {
-    const updatedObligations = [...obligations[party]]
-    updatedObligations[index] = value
-    setObligations({ ...obligations, [party]: updatedObligations })
-  }
+    const updatedObligations = [...obligations[party]];
+    updatedObligations[index] = value;
+    setObligations({ ...obligations, [party]: updatedObligations });
+  };
 
   // Tambahkan Hak/Kewajiban baru
   const addRight = (party: string) => {
-    setRights({ ...rights, [party]: [...rights[party], ""] })
-  }
+    setRights({ ...rights, [party]: [...rights[party], ""] });
+  };
 
   const addObligation = (party: string) => {
-    setObligations({ ...obligations, [party]: [...obligations[party], ""] })
-  }
+    setObligations({ ...obligations, [party]: [...obligations[party], ""] });
+  };
 
   // Hapus Hak/Kewajiban
   const removeRight = (party: string, index: number) => {
-    const updatedRights = rights[party].filter((_, i) => i !== index)
-    setRights({ ...rights, [party]: updatedRights })
-  }
+    const updatedRights = rights[party].filter((_, i) => i !== index);
+    setRights({ ...rights, [party]: updatedRights });
+  };
 
   const removeObligation = (party: string, index: number) => {
-    const updatedObligations = obligations[party].filter((_, i) => i !== index)
-    setObligations({ ...obligations, [party]: updatedObligations })
-  }
+    const updatedObligations = obligations[party].filter((_, i) => i !== index);
+    setObligations({ ...obligations, [party]: updatedObligations });
+  };
 
   // Form submission handler
   const handleSubmit = () => {
     // Basic form validation
     if (!judul.trim()) {
-      alert("Judul dokumen tidak boleh kosong")
-      return
+      alert("Judul dokumen tidak boleh kosong");
+      return;
     }
 
     if (!tujuan.trim()) {
-      alert("Tujuan kerjasama tidak boleh kosong")
-      return
+      alert("Tujuan kerjasama tidak boleh kosong");
+      return;
     }
 
     // Check if at least one party has a name
     const hasNamedParty = parties.some(
       (party) => party.customName.trim() !== ""
-    )
+    );
     if (!hasNamedParty) {
-      alert("Setidaknya satu pihak harus memiliki nama")
-      return
+      alert("Setidaknya satu pihak harus memiliki nama");
+      return;
     }
 
     // Prepare and submit form data
@@ -136,30 +172,46 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
       obligations,
       startDate,
       endDate,
-    }
+      disputeLocation,
+    };
 
-    onGenerate(formData)
-  }
+    onGenerate(formData);
+  };
 
   // Form reset handler
   const resetForm = () => {
-    setJudul("")
-    setTujuan("")
-    setStartDate(null)
-    setEndDate(null)
+    setJudul("");
+    setTujuan("");
+    setStartDate(null);
+    setEndDate(null);
+    setDisputeLocation("");
     setParties([
-      { id: "Pihak 1", customName: "" },
-      { id: "Pihak 2", customName: "" },
-    ])
+      {
+        id: "Pihak 1",
+        customName: "",
+        representativeName: "",
+        position: "",
+        phoneNumber: "",
+        address: "",
+      },
+      {
+        id: "Pihak 2",
+        customName: "",
+        representativeName: "",
+        position: "",
+        phoneNumber: "",
+        address: "",
+      },
+    ]);
     setRights({
       "Pihak 1": [""],
       "Pihak 2": [""],
-    })
+    });
     setObligations({
       "Pihak 1": [""],
       "Pihak 2": [""],
-    })
-  }
+    });
+  };
 
   return (
     <div className="p-8 bg-[#09090B] text-white rounded-md border border-[#27272A] w-[495px]">
@@ -215,7 +267,7 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
               <Calendar
                 mode="single"
                 selected={startDate || undefined}
-                onSelect={(date) => setStartDate(date || null)}
+                onSelect={handleStartDateChange}
               />
             </PopoverContent>
           </Popover>
@@ -243,23 +295,86 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
           </Popover>
         </div>
       </div>
+
+      {/* Lokasi Penyelesaian Sengketa */}
+      <div className="mb-4">
+        <label
+          htmlFor="disputeLocation"
+          className="block text-lg font-semibold text-[#FAFAFA] mb-2"
+        >
+          Lokasi Penyelesaian Sengketa
+        </label>
+        <Input
+          id="disputeLocation"
+          className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA]"
+          placeholder="Contoh: Pengadilan Negeri Jakarta Selatan"
+          value={disputeLocation}
+          onChange={(e) => setDisputeLocation(e.target.value)}
+        />
+      </div>
+
       {/* Pihak-Pihak */}
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-[#FAFAFA] mb-2">
           Pihak-Pihak
         </h3>
         {parties.map((party, idx) => (
-          <Input
+          <div
             key={party.id}
-            value={party.customName}
-            onChange={(e) => {
-              const updatedParties = [...parties]
-              updatedParties[idx].customName = e.target.value
-              setParties(updatedParties)
-            }}
-            className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA] mb-2"
-            placeholder={`${party.id} : Nama atau Organisasi`}
-          />
+            className="mb-4 p-4 border border-[#27272A] rounded-md"
+          >
+            <p className="font-medium mb-2">{party.id}</p>
+            <Input
+              value={party.customName}
+              onChange={(e) => {
+                const updatedParties = [...parties];
+                updatedParties[idx].customName = e.target.value;
+                setParties(updatedParties);
+              }}
+              className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA] mb-2"
+              placeholder="Nama atau Organisasi"
+            />
+            <Input
+              value={party.representativeName}
+              onChange={(e) => {
+                const updatedParties = [...parties];
+                updatedParties[idx].representativeName = e.target.value;
+                setParties(updatedParties);
+              }}
+              className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA] mb-2"
+              placeholder="Nama Perwakilan Pihak"
+            />
+            <Input
+              value={party.position}
+              onChange={(e) => {
+                const updatedParties = [...parties];
+                updatedParties[idx].position = e.target.value;
+                setParties(updatedParties);
+              }}
+              className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA] mb-2"
+              placeholder="Jabatan atau Predikat"
+            />
+            <Input
+              value={party.phoneNumber}
+              onChange={(e) => {
+                const updatedParties = [...parties];
+                updatedParties[idx].phoneNumber = e.target.value;
+                setParties(updatedParties);
+              }}
+              className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA] mb-2"
+              placeholder="Nomor Telepon"
+            />
+            <Textarea
+              value={party.address}
+              onChange={(e) => {
+                const updatedParties = [...parties];
+                updatedParties[idx].address = e.target.value;
+                setParties(updatedParties);
+              }}
+              className="bg-[#09090B] border border-[#27272A] text-white placeholder-[#A1A1AA]"
+              placeholder="Alamat"
+            />
+          </div>
         ))}
         <div className="flex gap-2">
           <Button
@@ -271,19 +386,19 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
           <Button
             className="flex-1 mt-2 bg-red-500 text-white hover:bg-red-600"
             onClick={() => {
-              if (parties.length <= 2) return
-              const lastParty = parties[parties.length - 1]
-              const newParties = parties.slice(0, -1)
-              setParties(newParties)
+              if (parties.length <= 2) return;
+              const lastParty = parties[parties.length - 1];
+              const newParties = parties.slice(0, -1);
+              setParties(newParties);
 
               // Remove rights and obligations for the deleted party
-              const newRights = { ...rights }
-              delete newRights[lastParty.id]
-              setRights(newRights)
+              const newRights = { ...rights };
+              delete newRights[lastParty.id];
+              setRights(newRights);
 
-              const newObligations = { ...obligations }
-              delete newObligations[lastParty.id]
-              setObligations(newObligations)
+              const newObligations = { ...obligations };
+              delete newObligations[lastParty.id];
+              setObligations(newObligations);
             }}
             disabled={parties.length <= 2}
           >
@@ -390,7 +505,7 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default DocumentForm
+export default DocumentForm;
