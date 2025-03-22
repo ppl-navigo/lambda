@@ -20,8 +20,6 @@ export async function POST(req: NextRequest) {
     // Tambahkan prompt baru ke daftar konteks
     previousPrompts.push(promptText);
 
-    console.log("Prompt text received:", promptText);
-
     // Gabungkan semua prompt sebelumnya untuk dijadikan konteks
     const context = previousPrompts.join("\n\n---\n\n");
 
