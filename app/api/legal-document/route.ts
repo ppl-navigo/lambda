@@ -3,7 +3,7 @@ import { google } from "@ai-sdk/google";
 import { streamText } from "ai";
 
 // Array untuk menyimpan semua prompt sebelumnya
-let previousPrompts: string[] = [];
+const previousPrompts: string[] = [];
 
 export async function POST(req: NextRequest) {
   try {

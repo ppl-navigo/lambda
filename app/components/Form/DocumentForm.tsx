@@ -59,7 +59,7 @@ const DocumentForm: React.FC<DocumentFormProps> = ({ onGenerate }) => {
     "Pihak 1": [""],
     "Pihak 2": [""],
   });
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage,] = useState("");
 
   // Listen for regenerate document event
   useEffect(() => {

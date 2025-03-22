@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it";
-import { set } from "date-fns";
 
 interface Pihak {
   nama: string;
@@ -27,6 +26,7 @@ export default function LegalDocumentsPage() {
   );
   const [error, setError] = useState<string | null>(null);
   // Add state to store the last submitted form data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [lastFormData, setLastFormData] = useState<any>(null);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +42,8 @@ export default function LegalDocumentsPage() {
         jenis_kontrak: selectedDocumentType,
         judul: formData.judul,
         tujuan: formData.tujuan,
+        
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pihak: formData.parties.map((party: any) => ({
           nama: party.customName || party.id,
           hak_pihak: formData.rights[party.id].filter(
