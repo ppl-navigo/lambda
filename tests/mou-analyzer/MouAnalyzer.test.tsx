@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import MouAnalyzer from "../../app/mou-analyzer/page";
+import MouAnalyzer from "../../app/analyze/page";
 
 // Mock Navbar to render a simple div.
 jest.mock("../../../app/components/Navbar", () => () => (
