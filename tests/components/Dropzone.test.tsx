@@ -19,7 +19,6 @@ describe("Dropzone Component", () => {
 
   it("renders the dropzone when no file is selected", () => {
     render(<Dropzone {...defaultProps} />);
-    // Memastikan tampilan default dropzone muncul
     expect(
       screen.getByText(/Drag & drop a PDF here, or click to select one/i)
     ).toBeInTheDocument();
@@ -40,16 +39,13 @@ describe("Dropzone Component", () => {
   it("does nothing when no files are selected", async () => {
     render(<Dropzone {...defaultProps} />);
     const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
-    // Simulasikan event change dengan FileList kosong
     fireEvent.change(input, { target: { files: [] } });
     await waitFor(() => {
-      // Karena tidak ada file yang diterima, tidak ada elemen selected-file yang muncul
       expect(screen.queryByTestId("selected-file")).toBeNull();
     });
   });
 
   it("shows drag active message when isDragActive is true", () => {
-    // Mock useDropzone untuk memaksa isDragActive menjadi true
     jest.spyOn(require("react-dropzone"), "useDropzone").mockImplementation((options) => {
       return {
         getRootProps: () => ({}),
@@ -138,5 +134,31 @@ describe("Dropzone Component", () => {
   it("does not render the upload button when no file is selected", () => {
     render(<Dropzone {...defaultProps} />);
     expect(screen.queryByText("Upload")).toBeNull();
+  });
+
+  // New test for non-PDF file
+  it("shows error message when a non-PDF file is selected", async () => {
+    render(<Dropzone {...defaultProps} />);
+    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
+
+    const nonPdfFile = new File(["dummy content"], "test.txt", { type: "text/plain" });
+    fireEvent.change(input, { target: { files: [nonPdfFile] } });
+
+    await waitFor(() => {
+      expect(screen.getByText("Only PDF files are allowed")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error message when a file larger than 10MB is selected", async () => {
+    render(<Dropzone {...defaultProps} />);
+    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
+
+    const largeFile = new File(["dummy content"], "largefile.pdf", { type: "application/pdf" });
+    Object.defineProperty(largeFile, "size", { value: 11 * 1024 * 1024 }); // Set file size to 11MB
+    fireEvent.change(input, { target: { files: [largeFile] } });
+
+    await waitFor(() => {
+      expect(screen.getByText("File size cannot be larger than 10MB")).toBeInTheDocument();
+    });
   });
 });
