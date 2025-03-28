@@ -9,8 +9,7 @@
     "lint": "next lint",
     "test": "jest --coverage --coverageReporters=lcov",
     "test:ci": "jest --runInBand",
-    "postbuild": "sentry-cli releases files coverage-report upload-sourcemaps .next --dist cov"
-
+    "postbuild": "sentry-cli releases files coverage-report upload-sourcemaps .next --dist cov --project navigo"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.1.20",
@@ -49,6 +48,7 @@
     "@babel/preset-react": "^7.26.3",
     "@babel/preset-typescript": "^7.26.0",
     "@eslint/eslintrc": "^3",
+    "@sentry/cli": "^2.43.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
@@ -74,6 +74,7 @@
   },
   "pnpm": {
     "ignoredBuiltDependencies": [
+      "@sentry/cli",
       "core-js",
       "sharp"
     ]
