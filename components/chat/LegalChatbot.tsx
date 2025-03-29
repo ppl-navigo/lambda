@@ -104,7 +104,7 @@ export function LegalChatbot({
                                 )}
                             >
                                 {message.role === "assistant" ? (
-                                    <div className="prose dark:prose-invert">
+                                    <div className="prose text-white">
                                         <MathpixMarkdown text={formatMessageWithCitations(message.content)}/>
                                     </div>
                                 ) : (

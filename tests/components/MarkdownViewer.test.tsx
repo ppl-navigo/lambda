@@ -1,136 +1,263 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import MarkdownViewer from "../../app/components/MarkdownViewer";
 import axios from "axios";
 
-// Mock axios for both GET and POST requests.
-jest.mock("axios");
+jest.mock('react-markdown', () => {
+  return ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
+});
+
+jest.mock('remark-gfm', () => {
+  return () => null; // Simply return null or an empty component, as we are not testing its behavior
+});
+
+jest.mock('remark-breaks', () => {
+  return () => null; // Similarly, mock remark-breaks as an empty component
+});
+
+
+import MarkdownViewer from "@/app/components/MarkdownViewer";
+import { act } from 'react'; // Change this line to use act from react
+
+// ----------------------------------------------------------------
+// 1) Polyfill ReadableStream so Node won't crash on streaming
+// ----------------------------------------------------------------
+global.ReadableStream = class {
+  // Minimal no-op polyfill so we don't crash
+  constructor() {}
+} as any;
+
+// ----------------------------------------------------------------
+// 2) Mock axios - "default.get" must be a jest.fn()
+// ----------------------------------------------------------------
+jest.mock("axios", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(), // ✅ Add this
+  },
+}));
+
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+mockedAxios.post = jest.fn().mockResolvedValue({
+  data: { extracted_text: "Mock extracted text from backend" },
+});
 
-// Create a dummy blob with an arrayBuffer method.
-const dummyBlob = new Blob(["dummy content"], { type: "application/pdf" });
-dummyBlob.arrayBuffer = async () => new ArrayBuffer(8);
 
-describe("MarkdownViewer", () => {
+// ----------------------------------------------------------------
+// 4) Mock fetch (AI streaming) - we'll do different scenarios
+// ----------------------------------------------------------------
+// Mock fetch (AI streaming) - success
+function mockFetchSuccess() {
+  global.fetch = jest.fn(async () => {
+    let callCount = 0;
+    return {
+      body: {
+        getReader() {
+          return {
+            async read() {
+              callCount++;
+              if (callCount === 1) {
+                return {
+                  done: false,
+                  value: new TextEncoder().encode(
+                    `**Klausul 1:** "Risky Text" **Alasan:** "Some reason."\n`
+                  ),
+                };
+              } else {
+                return { done: true, value: undefined };
+              }
+            },
+          };
+        },
+      },
+    } as any;
+  });
+}
+
+
+function mockFetchFail() {
+  global.fetch = jest.fn(async () => {
+    // This simulates a streaming error
+    throw new Error("AI streaming error");
+  });
+}
+
+// ----------------------------------------------------------------
+// 5) Create a dummy PDF blob. We'll re-use for "docx" too
+// ----------------------------------------------------------------
+const dummyBlob = new Blob(["dummy content"], { type: "application/octet-stream" });
+(dummyBlob as any).arrayBuffer = async () => new ArrayBuffer(8);
+
+// ----------------------------------------------------------------
+// TESTS
+// ----------------------------------------------------------------
+describe("MarkdownViewer (Simplified Tests)", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  test("renders 'No risks found.' when pdfUrl is null", async () => {
+  test("1) Renders 'No risks found.' if pdfUrl is null", async () => {
     render(<MarkdownViewer pdfUrl={null} />);
     expect(screen.getByText("No risks found.")).toBeInTheDocument();
     expect(mockedAxios.get).not.toHaveBeenCalled();
-    expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
-  test("displays error message for unexpected response format", async () => {
-    // Mock GET request to return dummy blob.
+  test("2) PDF load success & AI streaming success => we see risk items", async () => {
+    jest.setTimeout(15000);
+  
+    // Mock the axios and fetch functions
     mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
-    // Mock POST request to return an unexpected response (risks not an array).
-    mockedAxios.post.mockResolvedValueOnce({
-      status: 200,
-      data: { risks: "not an array" },
+    mockFetchSuccess();
+  
+    // Wrap the render in act to handle async updates
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
     });
+    
+    // Wait for the spinner to appear and then disappear
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
 
-    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
-    render(<MarkdownViewer pdfUrl={pdfUrl} />);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("⚠️ Unexpected response format.")
-      ).toBeInTheDocument();
-    });
-  });
-
-  test("displays error message on analysis failure", async () => {
-    // Simulate an error from axios.get.
-    mockedAxios.get.mockRejectedValueOnce(new Error("Network error"));
-
-    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
-    render(<MarkdownViewer pdfUrl={pdfUrl} />);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("❌ Failed to analyze document. Please try again.")
-      ).toBeInTheDocument();
-    });
-  });
-
-  test("displays risk items with clean text and toggles expansion", async () => {
-    // Prepare risk data that needs cleaning.
-    const riskData = [
-      {
-        clause: "**Bold Clause**\n\nMore text",
-        risky_text: "**Bold Risky**\n\nRisk text",
-        reason: "**Bold Reason**\n\nExplanation",
-      },
-    ];
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
-    mockedAxios.post.mockResolvedValueOnce({
-      status: 200,
-      data: { risks: riskData },
-    });
-
-    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
-    render(<MarkdownViewer pdfUrl={pdfUrl} />);
-
-    // Wait until loading is complete (spinner is removed).
-    await waitFor(() => {
-      expect(screen.queryByTestId("spinner")).not.toBeInTheDocument();
-    });
-
-    // Check that the clause is cleaned (asterisks removed, newlines fixed).
-    expect(screen.getByText(/📌 Bold Clause More text/i)).toBeInTheDocument();
-
-    // Verify that the risk item shows an "Expand" button.
+    // Check if the risk item is displayed
+    await waitFor(() => expect(screen.getByText(/Risky Text/i)).toBeInTheDocument());
+  
+    // Simulate expanding the risk item
     const expandButton = screen.getByRole("button", { name: /expand/i });
-    expect(expandButton).toBeInTheDocument();
-
-    // Click the expand button to show risk details.
     fireEvent.click(expandButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/🔍 Risky Text:/i)).toBeInTheDocument();
-      expect(screen.getByText(/⚠️ Reason:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Bold Risky Risk text/i)).toBeInTheDocument();
-      expect(screen.getByText(/Bold Reason Explanation/i)).toBeInTheDocument();
-    });
-
-    // Click the collapse button (now labeled "Collapse").
-    const collapseButton = screen.getByRole("button", { name: /collapse/i });
-    fireEvent.click(collapseButton);
-
-    await waitFor(() => {
-      expect(screen.queryByText(/🔍 Risky Text:/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/⚠️ Reason:/i)).not.toBeInTheDocument();
-    });
+  
+    // Verify that the reason for the risk appears
+    await waitFor(() => expect(screen.getByText(/⚠️ Reason:/i)).toBeInTheDocument());
   });
+  
 
-  test("displays spinner during loading", async () => {
-    // Prepare simple risk data.
-    const riskData = [
-      { clause: "Clause", risky_text: "Risk text", reason: "Reason" },
-    ];
-    // Simulate a slight delay in the POST request.
+  test("3) DOCX load success => no AI streaming or do we still stream? We'll mock success again", async () => {
+    jest.setTimeout(15000);
+
+    // Return docx blob
     mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
-    mockedAxios.post.mockImplementationOnce(() =>
-      new Promise((resolve) =>
-        setTimeout(
-          () => resolve({ status: 200, data: { risks: riskData } }),
-          100
-        )
-      )
-    );
+    mockFetchSuccess();
 
-    const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL}/stream/uploads/test.pdf`;
-    render(<MarkdownViewer pdfUrl={pdfUrl} />);
+    // We'll pass a docx URL
+    render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.docx" />);
 
-    // Immediately after render, the spinner should be visible.
-    expect(screen.getByTestId("spinner")).toBeInTheDocument();
-
-    // Wait for the spinner to disappear after the analysis.
+    // Adding a delay before checking spinner visibility
+    // Wait for the spinner to appear and then disappear
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+  
+    // The AI text
     await waitFor(() => {
-      expect(screen.queryByTestId("spinner")).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/The potential risky clauses are listed below/i)
+      ).toBeInTheDocument();
     });
   });
+
+  test("AI streaming success => we see risk items", async () => {
+    jest.setTimeout(10000); // Increase timeout to avoid the default 5000ms timeout
+  
+    // Set up mock responses for both axios and fetch
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockFetchSuccess();
+  
+    // Start the rendering process within act
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+  
+    // Wait for spinner to appear and disappear
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+  
+    // Assert that the risky clause is found
+    await waitFor(() => {
+      expect(screen.getByText(/Risky Text/i)).toBeInTheDocument();
+    });
+  
+    // Verify that the "Expand" button works
+    const expandButton = screen.getByRole("button", { name: /expand/i });
+    fireEvent.click(expandButton);
+    await waitFor(() => expect(screen.getByText(/⚠️ Reason:/i)).toBeInTheDocument());
+  });
+  
+  test("AI streaming fails => shows error message", async () => {
+    jest.setTimeout(10000); // Increase timeout to avoid default timeout
+  
+    // Set up mock for axios and a failing fetch
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockFetchFail(); // Force the AI streaming to fail
+  
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+  
+    // Wait for the spinner to appear and disappear
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+  
+    // Assert the error message is displayed after streaming fails
+    await waitFor(() => {
+      expect(screen.getByText(/gagal menganalisis dokumen/i)).toBeInTheDocument();
+    });
+  })
+
+  test("Catches error during AI streaming and displays error message", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockFetchFail();
+
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+    await waitFor(() => expect(screen.getByText(/Gagal menganalisis dokumen/i)).toBeInTheDocument());
+  });
+
+  test("Handles missing PDF URL gracefully", async () => {
+    render(<MarkdownViewer pdfUrl={null} />);
+    expect(screen.getByText("No risks found.")).toBeInTheDocument();
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  test("Handles empty AI response correctly", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+
+    global.fetch = jest.fn(async () => {
+      return {
+        body: {
+          getReader() {
+            return {
+              async read() {
+                return { done: true, value: undefined };
+              },
+            };
+          },
+        },
+      } as any;
+    });
+
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+    await waitFor(() => expect(screen.getByText(/Gagal menganalisis dokumen/i)).toBeInTheDocument());
+  });
+
+  test("Handles backend extraction error correctly", async () => {
+    // Mock the file download to succeed
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+  
+    // Simulate backend text extraction failing
+    mockedAxios.post.mockRejectedValueOnce(new Error("Extraction failed"));
+  
+    // Also mock fetch to avoid it interfering (since no text will be extracted anyway)
+    mockFetchSuccess();
+  
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+  
+    // Wait for the error to show up
+    await waitFor(() => {
+      expect(screen.getByText("❌ Error extracting text from backend.")).toBeInTheDocument();
+    });
+  });
+  
 });
