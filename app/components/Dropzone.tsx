@@ -15,21 +15,45 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string>("");
 
-  const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
-    // Jika tidak ada file yang diterima, keluar (branch ini juga diuji)
-    if (acceptedFiles.length === 0) return;
+  const onDrop = useCallback(
+    (acceptedFiles: File[], fileRejections: FileRejection[]) => {
+      // Reset error message
+      setFileError("");
 
-    // Jika ada file rejection (misal bukan PDF), set error dan keluar
-    if (fileRejections.length > 0) {
-      setFileError("Only PDF files are allowed");
-      return;
-    }
+      // If no files are accepted, exit
+      if (acceptedFiles.length === 0 && fileRejections.length === 0) return;
 
-    // Jika file valid (PDF), clear error dan set file
-    setFileError("");
-    const file = acceptedFiles[0];
-    setSelectedFile(file);
-  }, []);
+      // Handle file rejections for non-PDF files or large files
+      if (fileRejections.length > 0) {
+        const rejectedFile = fileRejections[0].file;
+
+        // Check if the file is not a PDF
+        if (rejectedFile.type !== "application/pdf") {
+          setFileError("Only PDF files are allowed");
+        }
+
+        // Check if the file size is larger than 10MB
+        if (rejectedFile.size > 10 * 1024 * 1024) {
+          setFileError((prevError) => `${prevError ? prevError + " and " : ""}File size cannot be larger than 10MB`);
+        }
+
+        return; // Stop further execution for rejections
+      }
+
+      // If file is valid, set it
+      const file = acceptedFiles[0];
+
+      // Additional size check in case the file passed type check
+      if (file.size > 10 * 1024 * 1024) {
+        setFileError("File size cannot be larger than 10MB");
+        return;
+      }
+
+      // If file is valid, set it
+      setSelectedFile(file);
+    },
+    []
+  );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -92,7 +116,7 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
           </button>
         )}
 
-        {/* Dropzone atau File Info */}
+        {/* Dropzone or File Info */}
         {!selectedFile ? (
           <div className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
             <input {...getInputProps()} />
@@ -110,7 +134,7 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
         )}
       </div>
 
-      {/* Tampilkan pesan error jika file tidak valid */}
+      {/* Display error message if the file is not valid */}
       {fileError && <p className="text-red-500 mt-2">{fileError}</p>}
 
       {/* Upload Button */}
