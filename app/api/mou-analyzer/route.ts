@@ -27,8 +27,7 @@ Klausul {nomor}: "{kalimat atau kata-kata berisiko}"
 Alasan: "{penjelasan mengapa klausul ini berisiko}"
 \`\`\`
 
-Jangan lupa berikan jawaban beserta dengan newline untuk readibility
-
+Tambahkan newline pada tempat yang diminta. Jangan pake newline setelah kata "Alasan:"
 Jika dokumen memiliki bahasa yang tidak dikenali, tampilkan pesan: "Bahasa tidak didukung". Jika tidak ditemukan klausul berisiko, tampilkan pesan: "Tidak ditemukan klausul yang dapat dianalisis". Jika terjadi kesalahan sistem, tampilkan pesan: "Gagal menganalisis dokumen, coba lagi nanti".
 
 Setiap klausul yang ditandai harus memiliki minimal satu alasan mengapa klausul tersebut berisiko, tetapi jangan berikan rekomendasi perbaikan terlebih dahulu.
@@ -38,16 +37,19 @@ Setiap klausul yang ditandai harus memiliki minimal satu alasan mengapa klausul 
 \`\`\`
 Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta alasannya:
 
+newline
 **Klausul 1:**
 "xxx"
 **Alasan:**
 "xxx"
 
+newline
 **Klausul 2:**
 "xxx"
 **Alasan:**
 "xxx"
 
+newline
 **Kesimpulan:**
 "xxx"
 
