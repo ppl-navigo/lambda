@@ -21,7 +21,7 @@ jest.mock("../../app/components/Sidebar", () => (props: {
   </div>
 ));
 
-// Mock Dropzone to render a button that sets a PDF URL.
+// ✅ Fix Dropzone Mock
 jest.mock("../../app/components/Dropzone", () => (props: {
   setPdfUrl: (url: string) => void;
   isSidebarVisible: boolean;
@@ -48,6 +48,8 @@ describe("MouAnalyzer", () => {
     // Navbar should be rendered.
     // expect(screen.getByTestId("navbar")).toBeInTheDocument();
     // Sidebar should always be rendered.
+    
+    // ✅ Sidebar should always be rendered.
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
     
     // ✅ Dropzone is rendered when pdfUrl is null.

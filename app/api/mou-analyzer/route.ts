@@ -5,56 +5,13 @@ import { streamText } from "ai";
 export async function POST(req: NextRequest) {
   try {
     // Retrieve promptText from request body
-    const { promptText } = await req.json();
+    const { promptText, systemPrompt } = await req.json();
 
     // Use Gemini 1.5 Flash model for streaming
     const { textStream } = await streamText({
       model: google("gemini-1.5-flash"),
-      system: `Analisis dokumen berikut untuk mengidentifikasi klausul yang berpotensi berisiko bagi pihak kedua. Risiko mencakup, namun tidak terbatas pada:
-
-- Ketidakseimbangan hak dan kewajiban antara pihak pertama dan pihak kedua
-- Klausul pembatalan yang merugikan
-- Klausul pembayaran yang berpotensi memberatkan
-- Klausul tanggung jawab yang bisa menyebabkan kerugian sepihak
-- Klausul force majeure yang tidak melindungi kepentingan pihak kedua
-- Klausul ambigu atau multi-tafsir yang bisa disalahgunakan
-- Klausul lain yang dapat menyebabkan dampak hukum negatif bagi pihak kedua
-
-Format hasil yang diharapkan dalam **markdown**:
-
-\`\`\`
-Klausul {nomor}: "{kalimat atau kata-kata berisiko}"
-Alasan: "{penjelasan mengapa klausul ini berisiko}"
-\`\`\`
-
-Tambahkan newline pada tempat yang diminta. Jangan pake newline setelah kata "Alasan:"
-Jika dokumen memiliki bahasa yang tidak dikenali, tampilkan pesan: "Bahasa tidak didukung". Jika tidak ditemukan klausul berisiko, tampilkan pesan: "Tidak ditemukan klausul yang dapat dianalisis". Jika terjadi kesalahan sistem, tampilkan pesan: "Gagal menganalisis dokumen, coba lagi nanti".
-
-Setiap klausul yang ditandai harus memiliki minimal satu alasan mengapa klausul tersebut berisiko, tetapi jangan berikan rekomendasi perbaikan terlebih dahulu.
-
-**Contoh Format Jawaban:** 
-
-\`\`\`
-Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta alasannya:
-
-newline
-**Klausul 1:**
-"xxx"
-**Alasan:**
-"xxx"
-
-newline
-**Klausul 2:**
-"xxx"
-**Alasan:**
-"xxx"
-
-newline
-**Kesimpulan:**
-"xxx"
-
-\`\`\``,
-      prompt: promptText,  // Send the user's promptText to Gemini
+      system: systemPrompt, // Use the dynamic system prompt
+      prompt: promptText,   // Send the user's promptText to Gemini
     });
 
     // We'll use a TransformStream to push SSE data back to the frontend
