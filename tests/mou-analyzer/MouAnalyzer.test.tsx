@@ -10,8 +10,6 @@ jest.mock("../../app/components/Navbar", () => () => (
 // Mock Sidebar to always render a container with a toggle button.
 // It displays "Visible" when isSidebarVisible is true and "Hidden" otherwise.
 jest.mock("../../app/components/Sidebar", () => (props: {
-// ✅ Fix Sidebar Mock
-jest.mock("../../app/components/Sidebar", () => (props: {
   isSidebarVisible: boolean;
   setIsSidebarVisible: (visible: boolean) => void;
 }) => (
@@ -23,8 +21,6 @@ jest.mock("../../app/components/Sidebar", () => (props: {
   </div>
 ));
 
-// Mock Dropzone to render a button that sets a PDF URL.
-jest.mock("../../app/components/Dropzone", () => (props: {
 // ✅ Fix Dropzone Mock
 jest.mock("../../app/components/Dropzone", () => (props: {
   setPdfUrl: (url: string) => void;
@@ -38,14 +34,10 @@ jest.mock("../../app/components/Dropzone", () => (props: {
 
 // Mock Streamer to display the PDF URL.
 jest.mock("../../app/components/Streamer", () => (props: { pdfUrl: string }) => (
-// ✅ Fix Streamer Mock
-jest.mock("../../app/components/Streamer", () => (props: { pdfUrl: string }) => (
   <div data-testid="streamer">Streamer - {props.pdfUrl}</div>
 ));
 
 // Mock MarkdownViewer to display the PDF URL.
-jest.mock("../../app/components/MarkdownViewer", () => (props: { pdfUrl: string }) => (
-// ✅ Fix MarkdownViewer Mock
 jest.mock("../../app/components/MarkdownViewer", () => (props: { pdfUrl: string }) => (
   <div data-testid="markdownViewer">MarkdownViewer - {props.pdfUrl}</div>
 ));
