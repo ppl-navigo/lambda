@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import axios from "axios";
+import { RiskItem } from "@/app/components/MarkdownViewer";
 
 jest.mock('react-markdown', () => {
   return ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
@@ -128,29 +129,67 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     await waitFor(() => expect(screen.getByText(/⚠️ Reason:/i)).toBeInTheDocument());
   });
   
-
-  test("3) DOCX load success => no AI streaming or do we still stream? We'll mock success again", async () => {
-    jest.setTimeout(15000);
-
-    // Return docx blob
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+  test("3) Displays revision when risk.revision is populated", async () => {
+    // Mock AI response with risks
     mockFetchSuccess();
-
-    // We'll pass a docx URL
-    render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.docx" />);
-
-    // Adding a delay before checking spinner visibility
-    // Wait for the spinner to appear and then disappear
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+  
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+  
+    // Wait for the spinner to disappear
     await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
   
-    // The AI text
-    await waitFor(() => {
-      expect(
-        screen.getByText(/The potential risky clauses are listed below/i)
-      ).toBeInTheDocument();
-    });
+    // Verify that risks are displayed
+    await waitFor(() => expect(screen.getByText(/Risky Text/i)).toBeInTheDocument());
+  
+    // Simulate expanding the risk item
+    const expandButton = screen.getByRole("button", { name: /expand/i });
+    fireEvent.click(expandButton);
+  
+    // Simulate clicking the "Get Revision" button
+    const reviseButton = screen.getByText(/Get Revision/i);
+    fireEvent.click(reviseButton);
+  
+    // Wait for the revision to appear
+    await waitFor(() => expect(screen.getByText(/📝 Revision:/i)).toBeInTheDocument());
   });
 
+  test("4) Handles 'Get Revision' button click and calls onRevise", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockFetchSuccess();
+  
+    const mockOnRevise = jest.fn();
+    const risk = { clause: "Test Clause", risky_text: "Test Risky Text", reason: "Test Reason" };
+  
+    render(
+      <RiskItem
+        risk={risk}
+        onRevise={mockOnRevise}
+      />
+    );
+  
+    // Simulate expanding the RiskItem
+    const expandButton = screen.getByRole("button", { name: /expand/i });
+    fireEvent.click(expandButton);
+  
+    // Simulate clicking the "Get Revision" button
+    const reviseButton = screen.getByText(/Get Revision/i);
+    fireEvent.click(reviseButton);
+  
+    // Verify that onRevise was called
+    expect(mockOnRevise).toHaveBeenCalledWith(risk);
+  });
+
+  test("6) Exits early when pdfUrl is null", async () => {
+    render(<MarkdownViewer pdfUrl={null} />);
+  
+    // Verify that no risks are processed
+    expect(screen.getByText("No risks found.")).toBeInTheDocument();
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+  
   test("AI streaming success => we see risk items", async () => {
     jest.setTimeout(10000); // Increase timeout to avoid the default 5000ms timeout
   
