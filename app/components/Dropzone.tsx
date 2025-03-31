@@ -68,19 +68,15 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
   
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
   
       const data = await response.json();
-      if (data.secure_url) {
-        setPdfUrl(data.secure_url); // Cloudinary's file URL
+      if (data.url) {
+        setPdfUrl(data.url); // The uploaded PDF's URL
       } else {
         throw new Error("Upload failed");
       }
@@ -89,7 +85,7 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
     } finally {
       setIsUploading(false);
     }
-  };
+  };  
   
 
   const handleDeleteFile = () => {
