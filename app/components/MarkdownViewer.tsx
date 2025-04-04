@@ -75,32 +75,30 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
   const downloadFileAndExtractText = useCallback(async (fileUrl: string) => {
     try {
-      let filename = fileUrl.split("/stream/")[1];
-      filename = filename.replace(/^uploads\/uploads\//, "uploads/");
+      console.log("📄 Downloading file from Cloudinary for text extraction:", fileUrl);
   
-      console.log("📂 Using filename for text extraction:", filename);
-  
-      // Step 1: Download file from your own backend
-      const fileResponse = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/download/${filename}`,
-        { responseType: "blob" }
-      );
-  
+      // Step 1: Download the file from Cloudinary as a Blob
+      const fileResponse = await axios.get(fileUrl, { responseType: "blob" });
       const fileBlob = fileResponse.data;
-      const file = new File([fileBlob], filename);
   
-      // Step 2: Upload it to the backend for extraction
+      // Step 2: Create a temporary File object from the Blob
+      const fileName = fileUrl.split("/").pop() || "unknown-file";
+      const fileType = fileResponse.headers["content-type"];
+      const file = new File([fileBlob], fileName, { type: fileType });
+  
+      // Step 3: Send the File object to the backend for extraction
       const formData = new FormData();
-      formData.append("file", file);
-
+      formData.append("file", file); // Append the File object
+  
       const extractResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/extract_text/`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        formData
       );
   
       const extractedText = extractResponse.data.extracted_text;
-      console.log("📝 Extracted text from backend:", extractedText.substring(0, 500));
+      console.log("📄 Extracted text from backend:", extractedText.substring(0, 500));
+  
+      // Cleanup: No need to delete the file in browser-based environments
       return extractedText;
     } catch (error) {
       console.error("❌ Error extracting text from backend:", error);
