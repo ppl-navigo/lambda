@@ -1,129 +1,141 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { google } from "@ai-sdk/google";
-import { streamText } from "ai";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts, PDFFont } from "pdf-lib";
 import FormData from "form-data";
 
 export async function POST(req: NextRequest) {
   try {
-    const { pdfUrl } = await req.json();
-    if (!pdfUrl) {
-      return NextResponse.json({ error: "Missing pdfUrl" }, { status: 400 });
+    const { pdfUrl, pagesContent } = await req.json();
+    
+    console.log("📥 Received pages from frontend:", pagesContent.length);
+
+    if (!pdfUrl || !pagesContent || !Array.isArray(pagesContent)) {
+      return NextResponse.json({ error: "Missing pdfUrl or pagesContent" }, { status: 400 });
     }
 
-    console.log("📥 Downloading PDF from:", pdfUrl);
-    const response = await axios.get(pdfUrl, { responseType: "arraybuffer" });
-    const pdfBuffer = Buffer.from(response.data);
+    // Combine all pages' content into one full doc
+    const fullText = pagesContent
+      .sort((a, b) => a.sectionNumber - b.sectionNumber)
+      .map(p => p.content.trim())
+      .join("\n\n");
 
-    // **Ekstraksi teks**
-    const extractedText = await extractTextFromPdf(pdfBuffer);
-    console.log("📝 Extracted Text:", extractedText.substring(0, 500));
+    // 🔄 Convert to PDF
+    const revisedPdfBuffer = await convertTextToPdf(fullText);
 
-    // **Revisi teks dengan Gemini melalui ai-sdk**
-    const revisedText = await reviseText(extractedText);
-    console.log("✍️ Revised Text:", revisedText.substring(0, 1000));
-
-    // **Konversi hasil revisi ke PDF**
-    const revisedPdfBuffer = await convertTextToPdf(revisedText);
-
-    // **Unggah PDF revisi ke server**
+    // 🔼 Upload PDF
     const revisedPdfUrl = await uploadRevisedPdf(revisedPdfBuffer);
+
     return NextResponse.json({ editedPdfUrl: revisedPdfUrl });
+
   } catch (error) {
     console.error("❌ Error in mou-revision API:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
-// ✅ **Ekstrak teks dari PDF**
-async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", pdfBuffer, { filename: "document.pdf", contentType: "application/pdf" });
-
-  const extractResponse = await axios.post(
-    `${process.env.NEXT_PUBLIC_API_URL}/extract_text/`,
-    formData,
-    { headers: formData.getHeaders() }
-  );
-
-  return extractResponse.data.extracted_text;
-}
-
-// ✅ **Revisi teks menggunakan ai-sdk**
-async function reviseText(text: string): Promise<string> {
-  const { textStream } = await streamText({
-    model: google("gemini-1.5-flash"),
-    system: "Lakukan revisi pada dokumen berikut dengan tetap mempertahankan format yang rapi dan profesional. Pastikan setiap paragraf dipisahkan oleh satu baris kosong (\n\n), dan setiap poin atau bagian memiliki pemisahan yang jelas. Jangan menghilangkan struktur asli dokumen, seperti judul, subjudul, dan pemisahan antara bagian. Pastikan kalimat tidak terlalu panjang agar tetap mudah dibaca dalam format PDF.",
-    prompt: text,
-  });
-
-  let revisedText = "";
-  for await (const chunk of textStream) {
-    revisedText += chunk;
-  }
-  return revisedText;
-}
-
-async function wrapText(text: string, maxWidth: number, pdfDoc: PDFDocument): Promise<string[]> {
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontSize = 12;
-    
-    const paragraphs = text.split("\n"); // Pisahkan berdasarkan newline
-    const lines: string[] = [];
-
-    for (const paragraph of paragraphs) {
-        const words = paragraph.split(" ");
-        let currentLine = "";
-
-        for (const word of words) {
-            const testLine = currentLine ? `${currentLine} ${word}` : word;
-            const textWidth = font.widthOfTextAtSize(testLine, fontSize);
-
-            if (textWidth < maxWidth) {
-                currentLine = testLine;
-            } else {
-                lines.push(currentLine);
-                currentLine = word;
-            }
-        }
-
-        lines.push(currentLine);
-        lines.push(""); // Tambahkan newline antar paragraf
-    }
-
-    return lines;
-}
-
+// 🔄 **Convert text to PDF**
 export async function convertTextToPdf(text: string): Promise<Buffer> {
-    const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontSize = 12;
-    const maxWidth = 500;
-    const lineHeight = 20;
-    let x = 50;
-    let y = 750;
+  const pdfDoc = await PDFDocument.create();
 
-    let page = pdfDoc.addPage([600, 800]);
-    const lines = await wrapText(text, maxWidth, pdfDoc);
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    for (const line of lines) {
-        if (y < 50) { // Jika y terlalu rendah, buat halaman baru
-            page = pdfDoc.addPage([600, 800]);
-            y = 750;
-        }
-        
-        if (line === "") {
-            y -= lineHeight; // Tambahkan spasi ekstra untuk newline
-        } else {
-            page.drawText(line, { x, y, font, size: fontSize });
-            y -= lineHeight;
-        }
+  const maxWidth = 500;
+  const lineHeight = 20;
+  let fontSize = 12;
+  let x = 50;
+  let y = 750;
+
+  let page = pdfDoc.addPage([600, 800]);
+
+  const paragraphs = text.split("\n");
+
+  for (const paragraph of paragraphs) {
+    const trimmed = paragraph.trim();
+    if (!trimmed) {
+      y -= lineHeight;
+      continue;
     }
 
-    const pdfBytes = await pdfDoc.save();
-    return Buffer.from(pdfBytes);
+    let font: PDFFont = fontRegular;
+    let size = fontSize;
+    let content = trimmed;
+
+    // 🔹 Check for markdown headers
+    if (trimmed.startsWith("###")) {
+      font = fontBold;
+      size = 14;
+      content = trimmed.replace(/^###\s*/, "");
+      y -= 10;
+    } else if (trimmed.startsWith("##")) {
+      font = fontBold;
+      size = 16;
+      content = trimmed.replace(/^##\s*/, "");
+      y -= 14;
+    } else if (trimmed.startsWith("#")) {
+      font = fontBold;
+      size = 20;
+      content = trimmed.replace(/^#\s*/, "");
+      y -= 18;
+    }
+
+    const words = content.split(" ");
+    let currentLine: { text: string; bold: boolean }[] = [];
+
+    for (let word of words) {
+      const isBold = /^\*\*(.+)\*\*$/.test(word) || word.startsWith("**") || word.endsWith("**");
+      const cleanedWord = word.replace(/^\*\*/, "").replace(/\*\*$/, "");
+
+      currentLine.push({ text: cleanedWord, bold: isBold });
+
+      // Calculate width of line
+      const lineWidth = currentLine.reduce((acc, chunk) => {
+        const useFont = chunk.bold ? fontBold : font;
+        return acc + useFont.widthOfTextAtSize(chunk.text + " ", size);
+      }, 0);
+
+      if (lineWidth > maxWidth) {
+        x = 50;
+        for (const chunk of currentLine) {
+          const useFont = chunk.bold ? fontBold : font;
+          page.drawText(chunk.text + " ", { x, y, font: useFont, size });
+          x += useFont.widthOfTextAtSize(chunk.text + " ", size);
+        }
+
+        y -= lineHeight;
+        currentLine = [];
+
+        if (y < 50) {
+          page = pdfDoc.addPage([600, 800]);
+          y = 750;
+        }
+      }
+    }
+
+    // Draw remaining line
+    if (currentLine.length > 0) {
+      x = 50;
+      for (const chunk of currentLine) {
+        const useFont = chunk.bold ? fontBold : font;
+        page.drawText(chunk.text + " ", { x, y, font: useFont, size });
+        x += useFont.widthOfTextAtSize(chunk.text + " ", size);
+      }
+      y -= lineHeight;
+    }
+
+    // New page if space is running out
+    if (y < 50) {
+      page = pdfDoc.addPage([600, 800]);
+      y = 750;
+    }
+
+    y -= 4; // Additional spacing between paragraphs
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
 }
+
 
 // ✅ **Unggah PDF hasil revisi ke server**
 async function uploadRevisedPdf(pdfBuffer: Buffer): Promise<string> {
