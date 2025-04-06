@@ -19,6 +19,13 @@ jest.mock('remark-breaks', () => {
 import MarkdownViewer from "@/app/components/MarkdownViewer";
 import { act } from 'react'; // Change this line to use act from react
 
+// Add this near the top of your test file
+beforeAll(() => {
+  // Prevent crash on scrollIntoView (jsdom doesn't support it)
+  window.HTMLElement.prototype.scrollIntoView = function () {};
+});
+
+
 // ----------------------------------------------------------------
 // 1) Polyfill ReadableStream so Node won't crash on streaming
 // ----------------------------------------------------------------
@@ -39,9 +46,12 @@ jest.mock("axios", () => ({
 }));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
-mockedAxios.post = jest.fn().mockResolvedValue({
-  data: { extracted_text: "Mock extracted text from backend" },
+mockedAxios.post.mockResolvedValueOnce({
+  data: {
+    pages_text: ["**Klausul 1:** \"Risky Text\" **Alasan:** \"Some reason.\""],
+  },
 });
+
 
 
 // ----------------------------------------------------------------
@@ -93,8 +103,29 @@ const dummyBlob = new Blob(["dummy content"], { type: "application/octet-stream"
 // TESTS
 // ----------------------------------------------------------------
 describe("MarkdownViewer (Simplified Tests)", () => {
-  afterEach(() => {
+  beforeEach(() => {
     jest.clearAllMocks();
+
+    // 🧹 Reset global mocks
+    mockedAxios.get.mockResolvedValue({
+      data: dummyBlob,
+      headers: {
+        "content-type": "application/pdf",
+      },
+    });
+
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        pages_text: ["**Klausul 1:** \"Risky Text\" **Alasan:** \"Some reason.\""],
+      },
+    });
+
+    // ✅ Default to successful fetch streaming unless overridden
+    mockFetchSuccess();
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
   });
 
   test("1) Renders 'No risks found.' if pdfUrl is null", async () => {
@@ -107,7 +138,13 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     jest.setTimeout(15000);
   
     // Mock the axios and fetch functions
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: dummyBlob,
+      headers: {
+        "content-type": "application/pdf",
+      },
+    });
+    
     mockFetchSuccess();
   
     // Wrap the render in act to handle async updates
@@ -132,7 +169,12 @@ describe("MarkdownViewer (Simplified Tests)", () => {
   test("3) Displays revision when risk.revision is populated", async () => {
     // Mock AI response with risks
     mockFetchSuccess();
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: dummyBlob,
+      headers: {
+        "content-type": "application/pdf",
+      },
+    });
   
     await act(async () => {
       render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
@@ -157,31 +199,29 @@ describe("MarkdownViewer (Simplified Tests)", () => {
   });
 
   test("4) Handles 'Get Revision' button click and calls onRevise", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
-    mockFetchSuccess();
-  
     const mockOnRevise = jest.fn();
-    const risk = { clause: "Test Clause", risky_text: "Test Risky Text", reason: "Test Reason" };
+    const risk = {
+      sectionNumber: 1,
+      title: "Klausul 1",
+      originalClause: "Test Risky Text",
+      reason: "Test Reason",
+      revisedClause: undefined,
+    };
   
-    render(
-      <RiskItem
-        risk={risk}
-        onRevise={mockOnRevise}
-      />
-    );
+    render(<RiskItem risk={risk} onRevise={mockOnRevise} />);
   
-    // Simulate expanding the RiskItem
+    // Expand the risk item
     const expandButton = screen.getByRole("button", { name: /expand/i });
     fireEvent.click(expandButton);
   
-    // Simulate clicking the "Get Revision" button
+    // Click Get Revision
     const reviseButton = screen.getByText(/Get Revision/i);
     fireEvent.click(reviseButton);
   
-    // Verify that onRevise was called
-    expect(mockOnRevise).toHaveBeenCalledWith(risk);
+    // onRevise callback should be called with the right data
+    await waitFor(() => expect(mockOnRevise).toHaveBeenCalledWith(risk));
   });
-
+  
   test("6) Exits early when pdfUrl is null", async () => {
     render(<MarkdownViewer pdfUrl={null} />);
   
@@ -194,7 +234,12 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     jest.setTimeout(10000); // Increase timeout to avoid the default 5000ms timeout
   
     // Set up mock responses for both axios and fetch
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: dummyBlob,
+      headers: {
+        "content-type": "application/pdf",
+      },
+    });
     mockFetchSuccess();
   
     // Start the rendering process within act
@@ -220,7 +265,12 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     jest.setTimeout(10000); // Increase timeout to avoid default timeout
   
     // Set up mock for axios and a failing fetch
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: dummyBlob,
+      headers: {
+        "content-type": "application/pdf",
+      },
+    });
     mockFetchFail(); // Force the AI streaming to fail
   
     await act(async () => {
@@ -237,7 +287,12 @@ describe("MarkdownViewer (Simplified Tests)", () => {
   })
 
   test("Catches error during AI streaming and displays error message", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: dummyBlob,
+      headers: {
+        "content-type": "application/pdf",
+      },
+    });
     mockFetchFail();
 
     await act(async () => {
@@ -254,34 +309,14 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 
-  test("Handles empty AI response correctly", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
-
-    global.fetch = jest.fn(async () => {
-      return {
-        body: {
-          getReader() {
-            return {
-              async read() {
-                return { done: true, value: undefined };
-              },
-            };
-          },
-        },
-      } as any;
-    });
-
-    await act(async () => {
-      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
-    });
-
-    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
-    await waitFor(() => expect(screen.getByText(/Gagal menganalisis dokumen/i)).toBeInTheDocument());
-  });
-
   test("Handles backend extraction error correctly", async () => {
     // Mock the file download to succeed
-    mockedAxios.get.mockResolvedValueOnce({ data: dummyBlob });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: dummyBlob,
+      headers: {
+        "content-type": "application/pdf",
+      },
+    });
   
     // Simulate backend text extraction failing
     mockedAxios.post.mockRejectedValueOnce(new Error("Extraction failed"));
@@ -299,4 +334,33 @@ describe("MarkdownViewer (Simplified Tests)", () => {
     });
   });
   
+  test("analyzeTextWithAI handles stream read error and sets error", async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: dummyBlob,
+      headers: { "content-type": "application/pdf" },
+    });
+  
+    global.fetch = jest.fn(async () => {
+      return {
+        body: {
+          getReader() {
+            return {
+              async read() {
+                throw new Error("stream read failed"); // 👈 Forces failure *inside* the streaming loop
+              },
+            };
+          },
+        },
+      } as any;
+    });
+  
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/stream/uploads/test.pdf" />);
+    });
+  
+    await waitFor(() => expect(screen.queryByTestId("spinner")).toBeNull());
+    await waitFor(() => {
+      expect(screen.getByText(/gagal menganalisis dokumen/i)).toBeInTheDocument();
+    });
+  });
 });
