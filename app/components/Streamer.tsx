@@ -1,37 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import axios from "axios";
 import { Button } from "../../components/ui/button";
+import { useMouStore } from "@/app/store/useMouStore";
 
 interface StreamerProps {
   pdfUrl: string;
 }
 
 const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
+  const { pagesContent } = useMouStore(); 
   const [editedPdfUrl, setEditedPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showEdited, setShowEdited] = useState(false);
+  const iframeSrcRef = useRef<string>(pdfUrl);
 
-  // 🔹 Fungsi untuk meminta revisi dari API
   const handleGenerateEditedPdf = async () => {
-    if (editedPdfUrl) {
-      // Jika sudah ada hasil revisi, langsung tampilkan
-      setShowEdited(true);
-      return;
-    }
-
     setLoading(true);
+    setShowEdited(false); // Optional: hide while loading
+
     try {
-      // 🔹 Kirim permintaan revisi ke API (hanya mengirim link PDF)
       const response = await axios.post("/api/mou-revision", {
-        pdfUrl, // Kirim link PDF, bukan file
+        pdfUrl,
+        pagesContent,
       });
 
       if (response.status === 200) {
-        const revisedPdfUrl = response.data.editedPdfUrl; // Ambil link PDF hasil revisi
-        setEditedPdfUrl(revisedPdfUrl);
-        setShowEdited(true);
+        const newUrl = response.data.editedPdfUrl;
+
+        // 🔄 Only update if URL has changed
+        if (newUrl !== iframeSrcRef.current) {
+          iframeSrcRef.current = newUrl;
+          setEditedPdfUrl(newUrl);
+          setShowEdited(true);
+        } else {
+          // Same URL, just switch back to view
+          setShowEdited(true);
+        }
       }
     } catch (error) {
       console.error("❌ Error generating edited PDF:", error);
@@ -39,6 +45,8 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
       setLoading(false);
     }
   };
+
+  const currentPdfUrl = showEdited && editedPdfUrl ? editedPdfUrl : pdfUrl;
 
   return (
     <div className="h-full w-full bg-gray-900 border-l border-gray-700 transition-all duration-300 flex flex-col">
@@ -67,7 +75,8 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
 
       {/* 🔹 Tampilkan PDF (original atau hasil revisi) */}
       <iframe
-        src={showEdited && editedPdfUrl ? editedPdfUrl : pdfUrl}
+        key={currentPdfUrl} // force refresh only when URL truly changes
+        src={currentPdfUrl}
         className="w-full h-full"
         title="PDF Viewer"
       ></iframe>
