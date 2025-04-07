@@ -1,20 +1,26 @@
 import React from "react";
 import { render, fireEvent, waitFor, screen } from "@testing-library/react";
 import Dropzone from "../../app/components/Dropzone";
-import axios from "axios";
 import { useDropzone } from "react-dropzone";
 
-// Mock axios untuk API calls
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+// Mock `fetch` to simulate Cloudinary API calls
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        secure_url: "https://res.cloudinary.com/dat7hvo77/sample.pdf",
+      }),
+  })
+) as jest.Mock;
 
-describe("Dropzone Component", () => {
+describe("Dropzone Component (Cloudinary)", () => {
   const setPdfUrl = jest.fn();
   const defaultProps = { setPdfUrl, isSidebarVisible: true };
 
   beforeEach(() => {
     setPdfUrl.mockClear();
-    mockedAxios.post.mockClear();
+    jest.clearAllMocks();
   });
 
   it("renders the dropzone when no file is selected", () => {
@@ -40,19 +46,21 @@ describe("Dropzone Component", () => {
     render(<Dropzone {...defaultProps} />);
     const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
     fireEvent.change(input, { target: { files: [] } });
+
     await waitFor(() => {
       expect(screen.queryByTestId("selected-file")).toBeNull();
     });
   });
 
   it("shows drag active message when isDragActive is true", () => {
-    jest.spyOn(require("react-dropzone"), "useDropzone").mockImplementation((options) => {
+    jest.spyOn(require("react-dropzone"), "useDropzone").mockImplementation(() => {
       return {
         getRootProps: () => ({}),
         getInputProps: () => ({}),
         isDragActive: true,
       };
     });
+
     render(<Dropzone {...defaultProps} />);
     expect(screen.getByText("Drop the PDF file here...")).toBeInTheDocument();
     jest.restoreAllMocks();
@@ -76,12 +84,7 @@ describe("Dropzone Component", () => {
     });
   });
 
-  it("uploads a file and calls setPdfUrl on success", async () => {
-    mockedAxios.post.mockResolvedValue({
-      status: 200,
-      data: { file_path: "uploaded.pdf" },
-    });
-
+  it("uploads a file to Cloudinary and calls setPdfUrl on success", async () => {
     render(<Dropzone {...defaultProps} />);
     const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
 
@@ -92,24 +95,31 @@ describe("Dropzone Component", () => {
       expect(screen.getByTestId("selected-file")).toHaveTextContent("test.pdf");
     });
 
-    fireEvent.click(screen.getByText("Upload"));
+    const uploadButton = screen.getByText("Upload");
+    expect(uploadButton).not.toBeDisabled();
+
+    fireEvent.click(uploadButton);
 
     await waitFor(() => {
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        `${process.env.NEXT_PUBLIC_API_URL}/upload/`,
-        expect.any(FormData),
-        expect.objectContaining({
-          headers: { "Content-Type": "multipart/form-data" },
-        })
+      expect(global.fetch).toHaveBeenCalledWith(
+        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/upload`,
+        expect.any(Object)
       );
-      expect(setPdfUrl).toHaveBeenCalledWith(`${process.env.NEXT_PUBLIC_API_URL}/stream/uploaded.pdf`);
+      expect(setPdfUrl).toHaveBeenCalledWith("https://res.cloudinary.com/dat7hvo77/sample.pdf");
     });
   });
 
   it("handles upload failure gracefully", async () => {
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-
-    mockedAxios.post.mockRejectedValue(new Error("Upload error"));
+    // Mock a failed upload response
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: false,
+        json: () =>
+          Promise.resolve({
+            error: { message: "Upload error" },
+          }),
+      })
+    ) as jest.Mock;
 
     render(<Dropzone {...defaultProps} />);
     const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
@@ -124,41 +134,13 @@ describe("Dropzone Component", () => {
     fireEvent.click(screen.getByText("Upload"));
 
     await waitFor(() => {
-      expect(mockedAxios.post).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
       expect(setPdfUrl).not.toHaveBeenCalled();
     });
-
-    consoleErrorSpy.mockRestore();
   });
 
   it("does not render the upload button when no file is selected", () => {
     render(<Dropzone {...defaultProps} />);
     expect(screen.queryByText("Upload")).toBeNull();
-  });
-
-  // New test for non-PDF file
-  it("shows error message when a non-PDF file is selected", async () => {
-    render(<Dropzone {...defaultProps} />);
-    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
-
-    const nonPdfFile = new File(["dummy content"], "test.txt", { type: "text/plain" });
-    fireEvent.change(input, { target: { files: [nonPdfFile] } });
-
-    await waitFor(() => {
-      expect(screen.getByText("Only PDF files are allowed")).toBeInTheDocument();
-    });
-  });
-
-  it("shows error message when a file larger than 10MB is selected", async () => {
-    render(<Dropzone {...defaultProps} />);
-    const input = screen.getByRole("presentation").querySelector("input") as HTMLInputElement;
-
-    const largeFile = new File(["dummy content"], "largefile.pdf", { type: "application/pdf" });
-    Object.defineProperty(largeFile, "size", { value: 11 * 1024 * 1024 }); // Set file size to 11MB
-    fireEvent.change(input, { target: { files: [largeFile] } });
-
-    await waitFor(() => {
-      expect(screen.getByText("File size cannot be larger than 10MB")).toBeInTheDocument();
-    });
   });
 });

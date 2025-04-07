@@ -64,22 +64,29 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
   const handleUpload = async () => {
     if (!selectedFile) return;
     setIsUploading(true);
+  
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/upload/`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+  
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
       });
-      if (response.status === 200) {
-        const uploadedPath = response.data.file_path;
-        setPdfUrl(`${process.env.NEXT_PUBLIC_API_URL}/stream/${uploadedPath}`);
+  
+      const data = await response.json();
+      if (data.url) {
+        setPdfUrl(data.url); // The uploaded PDF's URL
+      } else {
+        throw new Error("Upload failed");
       }
     } catch (error) {
       console.error("Upload failed:", error);
     } finally {
       setIsUploading(false);
     }
-  };
+  };  
+  
 
   const handleDeleteFile = () => {
     setSelectedFile(null);
