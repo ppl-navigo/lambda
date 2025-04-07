@@ -1,86 +1,103 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Streamer from '@/app/components/Streamer';
-import axios from 'axios';
+import '@testing-library/jest-dom';
 
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+// Mock ReadableStream for Jest
+global.ReadableStream = require('web-streams-polyfill').ReadableStream;
+
+// Mock fetch API
+global.fetch = jest.fn();
+
+// Mock react-markdown
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }) => <div>{children}</div>, // Simulasikan ReactMarkdown sebagai komponen sederhana
+}));
+
+// Mock remark-gfm (jika digunakan oleh react-markdown)
+jest.mock('remark-gfm', () => jest.fn());
+
+// Mock remark-breaks (jika digunakan oleh react-markdown)
+jest.mock('remark-breaks', () => jest.fn());
+
+// Mock lucide-react (jika digunakan untuk ikon)
+jest.mock('lucide-react', () => ({
+  Pencil: () => <svg data-testid="pencil-icon" />,
+  Save: () => <svg data-testid="save-icon" />,
+}));
+
+// Mock pdfjs-dist (jika digunakan untuk PDF processing)
+jest.mock('pdfjs-dist', () => ({
+  getDocument: jest.fn(() => Promise.resolve({})),
+}));
 
 describe('Streamer component', () => {
-  test('renders an iframe with the correct src and title when pdfUrl is provided', () => {
-    const pdfUrl = 'http://example.com/test.pdf';
+  const pdfUrl = 'http://example.com/test.pdf';
+
+  beforeEach(() => {
+    // Reset mocks before each test
+    jest.clearAllMocks();
+  });
+
+  test('renders an iframe with the correct src when showing original PDF', () => {
     render(<Streamer pdfUrl={pdfUrl} />);
-    const iframeElement = screen.getByTitle('PDF Viewer');
+    const iframeElement = screen.getByTitle('Original PDF');
     expect(iframeElement).toHaveAttribute('src', pdfUrl);
   });
 
-  test('does not make an API call if editedPdfUrl is already set', async () => {
-    const pdfUrl = 'http://example.com/test.pdf';
-    render(<Streamer pdfUrl={pdfUrl} />);
-    expect(screen.getByText(/Edited PDF/i)).toBeInTheDocument();
-    expect(axios.post).not.toHaveBeenCalled();
-  });
+  test('fetches and displays revised text when "Generate Revised Text" button is clicked', async () => {
+    const mockResponse = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Revised text chunk'));
+          controller.close();
+        },
+      }),
+    };
 
-  test('displays original PDF when "Original PDF" button is clicked', () => {
-    const pdfUrl = 'http://example.com/test.pdf';
-    render(<Streamer pdfUrl={pdfUrl} />);
-    fireEvent.click(screen.getByText(/Original PDF/i));
-    const iframeElement = screen.getByTitle('PDF Viewer');
-    expect(iframeElement).toHaveAttribute('src', pdfUrl);
-  });
-
-  test('handles error and does not change the iframe src on failure', async () => {
-    const pdfUrl = 'http://example.com/test.pdf';
-    const errorMessage = 'API error';
-    mockedAxios.post.mockRejectedValue(new Error(errorMessage));
+    global.fetch.mockResolvedValueOnce(mockResponse);
 
     render(<Streamer pdfUrl={pdfUrl} />);
 
-    fireEvent.click(screen.getByText(/Generate Edited PDF/i));
+    // Click "Generate Revised Text" button
+    fireEvent.click(screen.getByText(/Generate Revised Text/i));
 
-    await waitFor(() => expect(screen.getByText(/Processing.../i)).toBeInTheDocument());
+    // Wait for loading state to finish
+    await waitFor(() => expect(screen.queryByText(/Processing.../i)).not.toBeInTheDocument());
 
-    const iframeElement = screen.getByTitle('PDF Viewer');
-    expect(iframeElement).toHaveAttribute('src', pdfUrl);
+    // Check if revised text is displayed
+    expect(screen.getByText(/Revised text chunk/i)).toBeInTheDocument();
   });
 
-  test("updates iframe when new editedPdfUrl is different", async () => {
-    const pdfUrl = "http://example.com/test.pdf";
-    const editedPdfUrl = "http://example.com/edited-v1.pdf";
-  
-    mockedAxios.post.mockResolvedValueOnce({
-      status: 200,
-      data: { editedPdfUrl },
-    });
-  
+  test('enables editing mode and updates revised text', async () => {
+    const mockResponse = {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Initial revised text'));
+          controller.close();
+        },
+      }),
+    };
+
+    global.fetch.mockResolvedValueOnce(mockResponse);
+
     render(<Streamer pdfUrl={pdfUrl} />);
-  
-    fireEvent.click(screen.getByText(/Generate Edited PDF/i));
-  
-    await waitFor(() => {
-      const iframe = screen.getByTitle("PDF Viewer");
-      expect(iframe).toHaveAttribute("src", editedPdfUrl);
-    });
+
+    // Generate revised text
+    fireEvent.click(screen.getByText(/Generate Revised Text/i));
+    await waitFor(() => expect(screen.queryByText(/Processing.../i)).not.toBeInTheDocument());
+
+    // Enable editing mode
+    fireEvent.click(screen.getByTestId('pencil-icon')); // Pencil icon
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).toBeInTheDocument();
+
+    // Update revised text
+    fireEvent.change(textarea, { target: { value: 'Updated revised text' } });
+    expect(textarea).toHaveValue('Updated revised text');
+
+    // Save changes
+    fireEvent.click(screen.getByTestId('save-icon')); // Save icon
+    expect(screen.getByText(/Updated revised text/i)).toBeInTheDocument();
   });
-  
-  test("does not update state if editedPdfUrl is the same", async () => {
-    const pdfUrl = "http://example.com/test.pdf";
-    const sameUrl = "http://example.com/test.pdf";
-  
-    mockedAxios.post.mockResolvedValueOnce({
-      status: 200,
-      data: { editedPdfUrl: sameUrl },
-    });
-  
-    render(<Streamer pdfUrl={pdfUrl} />);
-  
-    fireEvent.click(screen.getByText(/Generate Edited PDF/i));
-  
-    await waitFor(() => {
-      const iframe = screen.getByTitle("PDF Viewer");
-      // Still same src, but showEdited should be true
-      expect(iframe).toHaveAttribute("src", sameUrl);
-      expect(screen.getByText(/Edited PDF/i)).toBeInTheDocument();
-    });
-  });
-  
 });
