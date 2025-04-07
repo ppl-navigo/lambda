@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import React from "react";
 import axios from "axios";
 import { FaSpinner } from "react-icons/fa";
@@ -8,10 +8,16 @@ import { useCallback } from "react";
 import ReactMarkdown from "react-markdown"; // Importing react-markdown
 import remarkGfm from "remark-gfm"; 
 import remarkBreaks from 'remark-breaks';
-import { useMouStore, RiskyClause, PageSection  } from "@/app/store/useMouStore";
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
+}
+
+interface Risk {
+  clause: string;
+  risky_text: string;
+  reason: string;
+  revision?: string; // Optional field for the revised text
 }
 
 interface ChatMessage {
@@ -19,47 +25,37 @@ interface ChatMessage {
   content: string;
 }
 
-
-export const RiskItem: React.FC<{ risk: RiskyClause; onRevise: (risk: RiskyClause) => void }> = ({ risk, onRevise }) => {
+export const RiskItem: React.FC<{ risk: Risk; onRevise: (risk: Risk) => void }> = ({ risk, onRevise }) => {
   const [expanded, setExpanded] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // ⬅️ Add this
-
-  const handleClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsLoading(true);
-    await onRevise(risk);
-    setIsLoading(false);
-  };
 
   return (
     <div className="mb-4 border-b border-gray-700 pb-2">
-      <div className="flex justify-between items-start cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <h3 className="text-lg font-semibold">📌 {risk.title}</h3>
-        <button className="text-sm text-blue-400 focus:outline-none mt-1">
+      <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        <h3 className="text-lg font-semibold">📌 {risk.clause}</h3>
+        <button className="text-sm text-blue-400 focus:outline-none">
           {expanded ? "Collapse" : "Expand"}
         </button>
       </div>
       {expanded && (
         <div className="mt-2 text-sm">
           <p>
-            <strong>🔍 Risky Text:</strong> {risk.originalClause}
+            <strong>🔍 Risky Text:</strong> {risk.risky_text}
           </p>
           <p className="mt-1">
             <strong>⚠️ Reason:</strong> {risk.reason}
           </p>
-          {/* ⏳ Show loading indicator if revision is being generated */}
-          {!risk.revisedClause && isLoading && (
-            <p className="mt-1 text-yellow-400">⏳ Generating revision...</p>
-          )}
-          {risk.revisedClause && (
+          {risk.revision && (
             <p className="mt-1">
-              <strong>📝 Revision:</strong> {risk.revisedClause}
+              <strong>📝 Revision:</strong> {risk.revision}
             </p>
           )}
-          {!risk.revisedClause && !isLoading && (
+          {!risk.revision && (
             <button
               className="mt-2 bg-blue-500 text-white px-2 py-1 rounded"
-              onClick={handleClick}
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent collapsing the item
+                onRevise(risk);
+              }}
             >
               Get Revision
             </button>
@@ -72,22 +68,14 @@ export const RiskItem: React.FC<{ risk: RiskyClause; onRevise: (risk: RiskyClaus
 
 // const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ pdfUrl }) => {
 const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) => {
-  const {
-    pagesContent,
-    riskyClauses,
-    setPagesContent,
-    setRiskyClauses,
-  } = useMouStore();
-
-  const [risks, setRisks] = useState<RiskyClause[]>([]);
+  const [risks, setRisks] = useState<Risk[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const downloadFileAndExtractText = useCallback(async (fileUrl: string) => {
     try {
-      // console.log("📄 Downloading file from Cloudinary for text extraction:", fileUrl);
+      console.log("📄 Downloading file from Cloudinary for text extraction:", fileUrl);
   
       // Step 1: Download the file from Cloudinary as a Blob
       const fileResponse = await axios.get(fileUrl, { responseType: "blob" });
@@ -107,34 +95,35 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
         formData
       );
   
-      const pagesText: string[] = extractResponse.data.pages_text;
-      // console.log(`📄 Total pages extracted: ${pagesText.length}`);
+      const extractedText = extractResponse.data.extracted_text;
+      console.log("📄 Extracted text from backend:", extractedText.substring(0, 500));
   
       // Cleanup: No need to delete the file in browser-based environments
-      return pagesText;
+      return extractedText;
     } catch (error) {
       console.error("❌ Error extracting text from backend:", error);
       setError("❌ Error extracting text from backend.");
-      return [];
+      return "";
     }
   }, []);
 
-  const analyzeTextWithAI = useCallback(
-    async (text: string, sectionNumber: number): Promise<RiskyClause[]> => {
-      setLoading(true);
-      setError("");
-      let accumulatedResponse = "";
+  const analyzeTextWithAI = useCallback(async (text: string) => {
+    setLoading(true);
+    setError("");
+    setRisks([]);
   
-      setChatMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          role: "user",
-          content: `Analyzing document page ${sectionNumber} for potential risks...`,
-        },
-      ]);
-  
+    const MAX_RETRIES = 3;
+    let accumulatedResponse = "";
+    
+    // Add a "user" message to indicate the start of analysis
+    setChatMessages((prevMessages) => [
+      ...prevMessages,
+      { role: "user", content: "Analyzing document for potential risks..." },
+    ]);
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        // console.log(`🤖 AI Analysis Attempt ${attempt} for section ${sectionNumber}...`);
+        console.log(`🤖 AI Analysis Attempt ${attempt}...`);
   
         const systemPrompt = `
 Analisis dokumen berikut untuk mengidentifikasi klausul yang berpotensi berisiko bagi pihak kedua. Risiko mencakup, namun tidak terbatas pada:
@@ -150,7 +139,7 @@ Analisis dokumen berikut untuk mengidentifikasi klausul yang berpotensi berisiko
 Format hasil yang diharapkan dalam **markdown**:
 
 \`\`\`
-Klausul {judul}: "{kalimat atau kata-kata berisiko}"
+Klausul {nomor}: "{kalimat atau kata-kata berisiko}"
 Alasan: "{penjelasan mengapa klausul ini berisiko}"
 \`\`\`
 
@@ -165,12 +154,12 @@ Setiap klausul yang ditandai harus memiliki minimal satu alasan mengapa klausul 
 \`\`\`
 Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta alasannya:
 
-**Klausul judul1:**
+**Klausul 1:**
 "xxx"
 **Alasan:**
 "xxx"
 
-**Klausul judul2:**
+**Klausul 2:**
 "xxx"
 **Alasan:**
 "xxx"
@@ -181,18 +170,27 @@ Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta a
 \`\`\`
 `;
 
+        // Make a request to the backend API
         const response = await fetch("/api/mou-analyzer", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ promptText: text, systemPrompt }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            promptText: text,       // User input
+            systemPrompt: systemPrompt, // Dynamic system prompt
+          }),
         });
-
+  
         if (!response.body) throw new Error("No stream body received");
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-
-        setChatMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+        
+        // Add an initial "assistant" message to the chat
+        setChatMessages((prevMessages) => [
+          ...prevMessages,
+          { role: "assistant", content: "" },
+        ]);
         
         // Reading and processing the stream
         while (true) {
@@ -204,8 +202,8 @@ Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta a
 
           // Directly append the chunk (which is plain text) to the accumulated response
           accumulatedResponse += chunk
-          // console.log("Received chunk:", chunk);
-          // console.log(accumulatedResponse);
+          console.log("Received chunk:", chunk);
+          console.log(accumulatedResponse);
           // Add the streamed response to the chat
           setChatMessages((prevMessages) => {
             const lastMessage = prevMessages[prevMessages.length - 1];
@@ -215,71 +213,66 @@ Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta a
                 { role: "assistant", content: accumulatedResponse },
               ];
             }
-            console.log("No last message found, returning previous messages");
             return prevMessages;
           });
       }
 
-      // console.log(`📄 Response for section ${sectionNumber}:`, accumulatedResponse);
+        break;
 
-      if (!accumulatedResponse || accumulatedResponse.trim() === "") return [];
-      if (accumulatedResponse.toLowerCase().includes("tidak ditemukan klausul")) return [];
-
-      // 🔹 Parse AI Response into Risks
-      const riskMatches = accumulatedResponse.matchAll(/(?:\*\*)?Klausul\s+(.*?):(?:\*\*)?\s*["']?(.*?)["']?\s*(?:\.\s*)?(?:\*\*)?Alasan:(?:\*\*)?\s*["']?(.*?)["']?(?:\n|$)/g);
-      const extractedRisks: RiskyClause[] = Array.from(riskMatches, (match: RegExpMatchArray) => ({
-        sectionNumber, // You can replace 0 later with the actual page number when processing per page
-        title: cleanText(`Klausul ${match[1]}`),
-        originalClause: cleanText(match[2]),
-        reason: cleanText(match[3]),
-      }));
-      
-      // console.log("⚠️ Extracted Risks:", extractedRisks);
-      return extractedRisks;
-    } catch (error) {
-      console.error(`❌ Error analyzing section ${sectionNumber}:`, error);
-      setError("❌ Gagal menganalisis dokumen, coba lagi nanti.");
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  },[]
-);
-    
-const processDocument = useCallback(async () => {
-  setLoading(true);
-  setError("");
-
-  if (!pdfUrl) return;
-
-  try {
-    const pages = await downloadFileAndExtractText(pdfUrl);
-
-    for (let i = 0; i < pages.length; i++) {
-      const sectionNumber = i + 1;
-      const rawPageText = pages[i];
-
-      // === 1. ORGANIZE TEXT WITH LLM ===
-      const organizedText = await organizeTextWithLLM(rawPageText);
-      setPagesContent([...pagesContent, { sectionNumber, content: organizedText }]);
-
-      // === 2. ANALYZE RISKS ===
-      const risks = await analyzeTextWithAI(organizedText, sectionNumber);
-
-      if (risks.length > 0) {
-        setRiskyClauses(risks);
-        setRisks((prev) => [...prev, ...risks]);
+      } catch (error) {
+        console.error(`❌ Error on attempt ${attempt}:`, error);
+        if (attempt === MAX_RETRIES) {
+          setError("❌ Gagal menganalisis dokumen: Tidak ada respons dari AI setelah beberapa kali percobaan.");
+          setLoading(false);
+          return;
+        }
       }
-
-      // ✅ If no risks, you can add a "clean" section note if needed
     }
-  } catch (err) {
-    console.error("❌ Gagal menganalisis dokumen:", err);
-    setError("Gagal menganalisis dokumen");
-  } finally {
+
+    console.log(accumulatedResponse);
+
+    if (!accumulatedResponse) {
+      setError("❌ Gagal menganalisis dokumen: Tidak ada respons yang valid dari AI.");
+      setLoading(false);
+      return;
+    }
+
+    // 🔹 Parse AI Response into Risks
+    const riskMatches = accumulatedResponse.matchAll(/\*\*Klausul\s+([\w\s().,]+):\*\*\s*['\"]?(.*)['\"]?\s*\.?\s*\*\*Alasan:\*\*\s*['\"]?(.*)['\"]?(?:\n|$)/g);
+    const extractedRisks: Risk[] = Array.from(riskMatches, (match: RegExpMatchArray) => ({
+      clause: cleanText(`Klausul ${match[1]}`),
+      risky_text: cleanText(match[2]),
+      reason: cleanText(match[3]),
+    }));
+
+    console.log("⚠️ Extracted Risks:", extractedRisks);
+
+    setRisks(extractedRisks.length ? extractedRisks : [{
+      clause: "N/A",
+      risky_text: "Tidak ditemukan klausul berisiko",
+      reason: "Dokumen tampak aman"
+    }]);
+
     setLoading(false);
-  }
-}, [pdfUrl, downloadFileAndExtractText]);
+  }, []);
+    
+  const processDocument = useCallback(async () => {
+      setLoading(true);
+      setError("");
+      try {
+        if (!pdfUrl) {
+          setLoading(false);
+          return;
+        }
+        const extractedText = await downloadFileAndExtractText(pdfUrl);
+        if (extractedText) await analyzeTextWithAI(extractedText);
+      } catch (err) {
+        console.error("❌ Error processing document:", err);
+        setError("Error processing document.");
+      } finally {
+        setLoading(false);
+      }
+    }, [pdfUrl, downloadFileAndExtractText, analyzeTextWithAI]);
 
   const cleanText = (text: string) => {
     return text.replace(/\*\*/g, "").trim();
@@ -288,7 +281,7 @@ const processDocument = useCallback(async () => {
   useEffect(() => {
     if (!pdfUrl) return;
 
-    // console.log("📢 Loading PDF...");
+    console.log("📢 Loading PDF...");
     const timeoutId = setTimeout(() => {
       processDocument();
     }, 300); // Prevents multiple executions
@@ -296,46 +289,9 @@ const processDocument = useCallback(async () => {
     return () => clearTimeout(timeoutId); // Cleanup to prevent multiple runs
   }, [pdfUrl, processDocument]);
 
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [chatMessages]);  
-
-  const organizeTextWithLLM = async (text: string): Promise<string> => {
-    const systemPrompt = `
-  Susun ulang teks dokumen berikut agar terlihat rapi dan profesional untuk ditampilkan kembali. Gunakan format markdown, tetapi jangan ada format tabel. Pastikan setiap poin atau bagian memiliki pemisahan yang jelas. Jangan menghilangkan struktur asli dokumen, seperti judul, subjudul, dan pemisahan antara bagian. 
-  `;
-  
-    const response = await fetch("/api/mou-analyzer", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        promptText: text,
-        systemPrompt,
-      }),
-    });
-  
-    if (!response.body) throw new Error("No response from LLM");
-  
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let result = "";
-  
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      result += decoder.decode(value);
-    }
-  
-    return result.trim();
-  };
-
   const generateRevisionWithAI = useCallback(async (riskyText: string, reason: string): Promise<string> => {
     try {
-      // console.log("🔄 Generating revision for:", riskyText);
+      console.log("🔄 Generating revision for:", riskyText);
 
       const systemPrompt = `Anda adalah asisten hukum yang bertugas merevisi teks berikut berdasarkan alasan yang diberikan. Tujuannya adalah membuat teks lebih adil dan mengurangi risiko bagi semua pihak yang terlibat. 
       
@@ -388,23 +344,23 @@ const processDocument = useCallback(async () => {
   }, []);
 
   const handleRevise = useCallback(
-    async (risk: RiskyClause) => {
-      const userMessage = `Generating revision for Klausul ${risk.title}...`;
+    async (risk: Risk) => {
+      const userMessage = `Generating revision for Klausul ${risk.clause}...`;
       setChatMessages((prevMessages) => [
         ...prevMessages,
         { role: "user", content: userMessage },
       ]);
 
-      const revisedText = await generateRevisionWithAI(risk.originalClause, risk.reason);
+      const revisedText = await generateRevisionWithAI(risk.risky_text, risk.reason);
 
       setChatMessages((prevMessages) => [
         ...prevMessages,
-        { role: "assistant", content: `Berikut adalah perbaikan yang disarankan:\n\n${revisedText}`},
+        { role: "assistant", content: revisedText },
       ]);
 
       setRisks((prevRisks) =>
         prevRisks.map((r) =>
-          r === risk ? { ...r, revisedClause: revisedText } : r
+          r === risk ? { ...r, revision: revisedText } : r
         )
       );
     },
@@ -417,21 +373,9 @@ const processDocument = useCallback(async () => {
         {loading && <FaSpinner data-testid="spinner" className="text-4xl animate-spin" />}
         {error && <p>{error}</p>}
         {!loading && !error && risks.length === 0 && <p>No risks found.</p>}
-        {!loading && Object.entries(
-          risks.reduce((acc, risk) => {
-            acc[risk.sectionNumber] = acc[risk.sectionNumber] || [];
-            acc[risk.sectionNumber].push(risk);
-            return acc;
-          }, {} as Record<number, RiskyClause[]>)
-        ).map(([sectionNumber, group]) => (
-          <div key={sectionNumber} className="mb-6">
-            <h2 className="text-xl font-bold mb-2 text-blue-300">📄 Page {sectionNumber}</h2>
-            {group.map((risk, index) => (
-              <RiskItem key={index} risk={risk} onRevise={handleRevise} />
-            ))}
-          </div>
+        {!loading && risks.map((risk, index) => (
+          <RiskItem key={index} risk={risk} onRevise={handleRevise} />
         ))}
-
       </div>
       <div className="bg-gray-800 text-white p-4 rounded-md overflow-y-auto">
         <h3 className="text-lg font-semibold mb-2">AI Chat:</h3>
@@ -443,21 +387,20 @@ const processDocument = useCallback(async () => {
                 msg.role === "user" ? "bg-blue-500 self-end" : "bg-gray-700 self-start"
               } max-w-[80%]`}
             >
-              <div className="text-sm whitespace-pre-wrap break-words">
+              {msg.role === "assistant" ? (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkBreaks]}
                   components={{
-                    p: ({ children }) => <p className="mb-2">{children}</p>,
-                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    p: (props) => <p className="text-sm" {...props} />,
                   }}
                 >
                   {msg.content}
                 </ReactMarkdown>
-              </div>
-
+              ) : (
+                <p className="text-sm">{msg.content}</p>
+              )}
             </div>
           ))}
-          <div ref={chatEndRef} />
         </div>
       </div>
     </div>
