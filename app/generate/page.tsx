@@ -12,6 +12,9 @@ import { ChevronDown, MoreHorizontal } from "lucide-react"
 import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it"
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
+import { Document as DocxDocument, Packer, Paragraph, TextRun } from 'docx';
+import { marked } from 'marked';
+import { saveAs } from 'file-saver';
 
 interface Pihak {
   nama: string;
@@ -28,6 +31,7 @@ export default function LegalDocumentsPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
+  const [canDownload, setCanDownload] = useState(false);
   // Add state to store the last submitted form data
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [lastFormData, setLastFormData] = useState<any>(null);
@@ -37,6 +41,7 @@ export default function LegalDocumentsPage() {
     setIsGenerating(true);
     setError(null); // Reset error message sebelum memulai proses baru
     setShowSaved(false); // Hide saved message when regenerating
+    setCanDownload(false);
     // Store the form data for potential retry
     setLastFormData(formData);
     console.log("ini adalah pihak", formData.parties);
@@ -145,6 +150,9 @@ export default function LegalDocumentsPage() {
         console.error('Error saving to Supabase:', error);
       }
 
+      setGeneratedDocument(fullText);
+      setCanDownload(true);
+
     } catch (err) {
       console.error("Failed to generate document:", err);
 
@@ -181,6 +189,47 @@ export default function LegalDocumentsPage() {
       console.log("ini adalah pihak", lastFormData.parties);
       await handleGenerateDocument(lastFormData);
       setPrompt("");
+    }
+  };
+
+  const handleDownload = async () => {
+    if (generatedDocument) {
+      try {
+        // Parse markdown to HTML tokens
+        const tokens = marked.lexer(generatedDocument);
+        
+        // Convert tokens to docx paragraphs
+        const docxParagraphs = tokens.map(token => {
+          if (token.type === 'heading') {
+            return new Paragraph({
+              children: [new TextRun({ text: token.text, bold: true, size: 32 })],
+              spacing: { after: 200 }
+            });
+          } else if (token.type === 'paragraph') {
+            return new Paragraph({
+              children: [new TextRun({ text: token.text })],
+              spacing: { after: 200 }
+            });
+          }
+          return new Paragraph({ children: [new TextRun({ text: '' })] });
+        });
+
+        // Create docx document
+        const doc = new DocxDocument({
+          sections: [{
+            properties: {},
+            children: docxParagraphs
+          }]
+        });
+
+        // Generate and save the docx file
+        const buffer = await Packer.toBlob(doc);
+        const fileName = lastFormData?.judul || 'document';
+        saveAs(buffer, `${fileName}-${new Date().toISOString()}.docx`);
+      } catch (error) {
+        console.error('Error generating DOCX:', error);
+        setError('Failed to generate document download');
+      }
     }
   };
 
@@ -325,6 +374,20 @@ export default function LegalDocumentsPage() {
         <div className="flex gap-10">
           {/* Left Side - Document Streaming Preview */}
           <div className="w-2/3 bg-[#09090B] p-6 rounded-lg border border-[#27272A] flex flex-col">
+            <div
+              className="flex justify-between items-center mb-4"
+            >
+              <h2 className="text-xl font-semibold">Preview Dokumen</h2>
+              {canDownload && (
+                <Button
+                  onClick={handleDownload}
+                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                  disabled={!canDownload}
+                >
+                  Download Document
+                </Button>
+              )}
+            </div>
             <div
               className="flex-grow border border-[#27272A] p-4 rounded-lg overflow-auto"
               data-testid="document-preview-container"
