@@ -119,3 +119,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+p {
+  white-space: pre-wrap; /* Maintains whitespace formatting, including newlines */
+}

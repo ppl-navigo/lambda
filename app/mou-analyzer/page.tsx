@@ -8,14 +8,14 @@ import MarkdownViewer from "../components/MarkdownViewer";
 
 const MouAnalyzer = () => {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [editedPdfUrl, setEditedPdfUrl] = useState<string | null>(null);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
   return (
     <div className="bg-black text-white h-screen flex flex-col">
-
       {/* Wrapper */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Always render Sidebar container */}
+        {/* Sidebar */}
         <div className="h-full w-1/8">
           <Sidebar
             isSidebarVisible={isSidebarVisible}
@@ -31,11 +31,18 @@ const MouAnalyzer = () => {
             </div>
           ) : (
             <div className="grid grid-cols-5 h-full overflow-hidden">
+              {/* Markdown Viewer */}
               <div className="col-span-3 overflow-y-auto transition-all duration-300">
                 <MarkdownViewer pdfUrl={pdfUrl} />
               </div>
-              <div className="col-span-2 overflow-y-auto">
-                <Streamer pdfUrl={pdfUrl} />
+
+              {/* Streamer Section */}
+              <div className="col-span-2 flex flex-col overflow-y-auto">
+                <Streamer
+                  pdfUrl={pdfUrl}
+                  editedPdfUrl={editedPdfUrl}
+                  setEditedPdfUrl={setEditedPdfUrl}
+                />
               </div>
             </div>
           )}
