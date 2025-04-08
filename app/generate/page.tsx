@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DocumentForm from "../components/Form/DocumentForm";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,9 +7,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
-import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it";
+} from "@/components/ui/dropdown-menu"
+import { ChevronDown, MoreHorizontal } from "lucide-react"
+import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it"
+import Link from "next/link";
+import { supabase } from "@/utils/supabase";
 
 interface Pihak {
   nama: string;
@@ -25,6 +27,7 @@ export default function LegalDocumentsPage() {
     "Jenis Dokumen Hukum"
   );
   const [error, setError] = useState<string | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
   // Add state to store the last submitted form data
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [lastFormData, setLastFormData] = useState<any>(null);
@@ -33,6 +36,7 @@ export default function LegalDocumentsPage() {
   const handleGenerateDocument = async (formData: any) => {
     setIsGenerating(true);
     setError(null); // Reset error message sebelum memulai proses baru
+    setShowSaved(false); // Hide saved message when regenerating
     // Store the form data for potential retry
     setLastFormData(formData);
     console.log("ini adalah pihak", formData.parties);
@@ -106,15 +110,41 @@ export default function LegalDocumentsPage() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let done = false;
+      let fullText = "";
       setGeneratedDocument(""); // Reset generated document
+      
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
         console.log("Received chunk awal:", value);
         const chunk = decoder.decode(value);
         const cleanedChunk = chunk.replace(/data:\s*/g, "").trim();
+        fullText += cleanedChunk;
         setGeneratedDocument((prev) => prev + cleanedChunk);
       }
+
+      // After streaming is complete, save to Supabase
+      try {
+        const { error: supabaseError } = await supabase
+          .from('documents')
+          .insert([
+            {
+              title: apiData.judul,
+              content: fullText,
+              created_at: new Date().toISOString(),
+              document_type: apiData.jenis_kontrak,
+            }
+          ]);
+        console.log("Saved to Supabase");
+        setShowSaved(true);
+
+        if (supabaseError) {
+          console.error('Error saving to Supabase:', supabaseError);
+        }
+      } catch (error) {
+        console.error('Error saving to Supabase:', error);
+      }
+
     } catch (err) {
       console.error("Failed to generate document:", err);
 
@@ -180,11 +210,7 @@ export default function LegalDocumentsPage() {
       );
     }
 
-    return (
-      <p className="text-gray-400" data-testid="loading-message">
-        📄 Generated document will show here...
-      </p>
-    );
+    return null;
   };
 
   return (
@@ -198,39 +224,47 @@ export default function LegalDocumentsPage() {
 
           <div className="flex items-center gap-2">
             {/* Dropdown Jenis Dokumen */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2 px-4 py-2 border border-[#27272A] bg-[#09090B] hover:bg-gray-700 text-white"
+            <div className="flex items-center gap-2">
+              {showSaved && (
+                <div className="bg-green-500 text-white px-4 py-2 rounded-md shadow-lg">
+                  Document Saved
+                </div>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2 px-4 py-2 border border-[#27272A] bg-[#09090B] hover:bg-gray-700 text-white"
+                    data-testid="document-type-button"
+                  >
+                    {selectedDocumentType}{" "}
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="bg-[#27272A] border border-gray-700 text-white rounded-md shadow-lg"
                 >
-                  {selectedDocumentType}
-                  <ChevronDown className="w-4 h-4 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="bg-[#27272A] border border-gray-700 text-white rounded-md shadow-lg w-[200px]"
-              >
-                <DropdownMenuItem
-                  onClick={() => setSelectedDocumentType("MoU")}
-                >
-                  MoU
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setSelectedDocumentType("Kontrak Kerja")}
-                >
-                  Kontrak Kerja
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    setSelectedDocumentType("Perjanjian Kerjasama")
-                  }
-                >
-                  Perjanjian Kerjasama
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem
+                    onClick={() => setSelectedDocumentType("MoU")}
+                  >
+                    MoU
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSelectedDocumentType("Kontrak Kerja")}
+                  >
+                    Kontrak Kerja
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      setSelectedDocumentType("Perjanjian Kerjasama")
+                    }
+                  >
+                    Perjanjian Kerjasama
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             {/* Action Buttons */}
             <Button
@@ -255,6 +289,15 @@ export default function LegalDocumentsPage() {
             >
               Bagikan
             </Button>
+            <Link href="/generate/history">
+              <Button
+                variant="outline"
+                className="border border-[#27272A] bg-[#27272A] hover:bg-gray-700 text-white"
+                disabled={isGenerating}
+              >
+                History
+              </Button>
+            </Link>
 
             {/* Dropdown menu button "..." */}
             <DropdownMenu>
@@ -318,10 +361,12 @@ export default function LegalDocumentsPage() {
 
           {/* Right Side - Form */}
           <div className="w-1/3">
-            <DocumentForm
-              onGenerate={handleGenerateDocument}
-              documentType={selectedDocumentType}
-            />
+            <div className="flex flex-col gap-4">
+              <DocumentForm
+                onGenerate={handleGenerateDocument}
+                documentType={selectedDocumentType}
+              />
+            </div>
           </div>
         </div>
       </div>
