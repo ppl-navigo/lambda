@@ -8,7 +8,7 @@ import { useCallback } from "react";
 import ReactMarkdown from "react-markdown"; // Importing react-markdown
 import remarkGfm from "remark-gfm"; 
 import remarkBreaks from 'remark-breaks';
-import { useMouStore, RiskyClause, PageSection  } from "@/app/store/useMouStore";
+import { useMouStore, RiskyClause } from "@/app/store/useMouStore";
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
@@ -74,7 +74,6 @@ export const RiskItem: React.FC<{ risk: RiskyClause; onRevise: (risk: RiskyClaus
 const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) => {
   const {
     pagesContent,
-    riskyClauses,
     setPagesContent,
     setRiskyClauses,
   } = useMouStore();
@@ -294,7 +293,7 @@ const processDocument = useCallback(async () => {
     }, 300); // Prevents multiple executions
 
     return () => clearTimeout(timeoutId); // Cleanup to prevent multiple runs
-  }, [pdfUrl, processDocument]);
+  }, [pdfUrl, downloadFileAndExtractText, analyzeTextWithAI, pagesContent, setPagesContent, setRiskyClauses]);
 
   useEffect(() => {
     if (chatEndRef.current) {
