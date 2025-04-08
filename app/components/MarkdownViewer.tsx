@@ -8,7 +8,7 @@ import { useCallback } from "react";
 import ReactMarkdown from "react-markdown"; // Importing react-markdown
 import remarkGfm from "remark-gfm"; 
 import remarkBreaks from 'remark-breaks';
-import { useMouStore, RiskyClause  } from "@/app/store/useMouStore";
+import { useMouStore, RiskyClause, PageSection  } from "@/app/store/useMouStore";
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
@@ -74,6 +74,7 @@ export const RiskItem: React.FC<{ risk: RiskyClause; onRevise: (risk: RiskyClaus
 const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) => {
   const {
     pagesContent,
+    riskyClauses,
     setPagesContent,
     setRiskyClauses,
   } = useMouStore();
@@ -278,7 +279,7 @@ const processDocument = useCallback(async () => {
   } finally {
     setLoading(false);
   }
-}, [pdfUrl, downloadFileAndExtractText, analyzeTextWithAI, pagesContent, setPagesContent, setRiskyClauses]);
+}, [pdfUrl, downloadFileAndExtractText]);
 
   const cleanText = (text: string) => {
     return text.replace(/\*\*/g, "").trim();
@@ -393,25 +394,22 @@ const processDocument = useCallback(async () => {
         ...prevMessages,
         { role: "user", content: userMessage },
       ]);
-  
+
       const revisedText = await generateRevisionWithAI(risk.originalClause, risk.reason);
-  
+
       setChatMessages((prevMessages) => [
         ...prevMessages,
-        {
-          role: "assistant",
-          content: `Berikut adalah perbaikan yang disarankan:\n\n${revisedText}`,
-        },
+        { role: "assistant", content: `Berikut adalah perbaikan yang disarankan:\n\n${revisedText}`},
       ]);
-  
+
       setRisks((prevRisks) =>
         prevRisks.map((r) =>
           r === risk ? { ...r, revisedClause: revisedText } : r
         )
       );
     },
-    [generateRevisionWithAI] // ✅ Hanya ini yang digunakan
-  );  
+    [generateRevisionWithAI]
+  );
 
   return (
     <div className="grid grid-cols-2 gap-4 h-screen">
