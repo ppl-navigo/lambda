@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import { FileRejection, useDropzone } from "react-dropzone";
-import axios from "axios";
 import { FiUpload, FiX } from "react-icons/fi";
 
 interface DropzoneProps {
