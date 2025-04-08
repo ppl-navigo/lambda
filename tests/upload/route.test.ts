@@ -1,132 +1,117 @@
-import { FormData, File } from "formdata-node";
-import { POST } from "../../app/api/upload/route";
-import cloudinary from "cloudinary";
+/**
+ * @jest-environment node
+ */
+import { POST } from "@/app/api/upload/route";
+import { NextRequest } from "next/server";
 
-// Mock console.error to suppress error logs during tests
-const consoleErrorMock = jest.spyOn(console, "error");
-beforeEach(() => {
-  consoleErrorMock.mockClear(); // Clear mock before each test
-});
-afterAll(() => {
-  consoleErrorMock.mockRestore(); // Restore original console.error after all tests
-});
-
-// Mock Cloudinary
+// Mock Cloudinary with default successful upload
 jest.mock("cloudinary", () => ({
   v2: {
     config: jest.fn(),
     uploader: {
-      upload_stream: jest.fn(),
+      upload_stream: jest.fn((options, callback) => ({
+        end: jest.fn().mockImplementation(() => {
+          callback(null, { secure_url: "https://mocked-url.com/file.jpg" });
+        })
+      }))
     },
   },
 }));
 
-describe("Upload API", () => {
+// Mock Next.js server utilities
+jest.mock("next/server", () => ({
+  NextRequest: class {
+    url: string;
+    method: string;
+    headers: Headers;
+    body: any;
+
+    constructor(url: string, options: { method: string; body?: any }) {
+      this.url = url;
+      this.method = options.method;
+      this.headers = new Headers();
+      this.body = options.body || null;
+    }
+
+    async formData() {
+      if (this.body instanceof FormData) return this.body;
+      throw new Error("FormData error");
+    }
+  },
+  NextResponse: {
+    json: (body: any, init?: { status: number }) => ({
+      status: init?.status || 200,
+      json: async () => body,
+    }),
+  },
+}));
+
+describe("POST /api/upload (Route Handler)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock environment variables
-    process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME = "test-cloud";
-    process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY = "test-api-key";
-    process.env.NEXT_PUBLIC_CLOUDINARY_API_SECRET = "test-api-secret";
   });
 
-  it("should upload a file successfully and return the secure URL", async () => {
-    // Mock a file in memory
-    const fileContent = Buffer.from("This is a test PDF file content.", "utf-8");
-    const file = new File([fileContent], "example.pdf", {
-      type: "application/pdf",
-    });
-
-    // Mock arrayBuffer() method
-    file.arrayBuffer = jest.fn().mockResolvedValue(fileContent);
-
-    // Create FormData
+  it("successfully uploads file", async () => {
+    const file = new File(["test"], "test.txt");
     const formData = new FormData();
     formData.append("file", file);
 
-    // Mock request
-    const mockRequest = {
-      formData: jest.fn().mockResolvedValue(formData),
-    };
+    const response = await POST(new NextRequest("http://localhost", {
+      method: "POST",
+      body: formData,
+    }));
 
-    // Mock Cloudinary response
-    const mockCloudinaryResult = {
-      secure_url: "https://res.cloudinary.com/test-cloud/raw/upload/example.pdf",
-    };
-    (cloudinary.v2.uploader.upload_stream as jest.Mock).mockImplementation(
-      (
-        options: Record<string, any>,
-        callback: (error: Error | null, result?: any) => void
-      ) => {
-        callback(null, mockCloudinaryResult);
-        return { end: jest.fn() };
-      }
-    );
-
-    // Call the API
-    const response = await POST(mockRequest as any);
-
-    // Assertions
     expect(response.status).toBe(200);
-    const json = await response.json();
-    expect(json.url).toBe("https://res.cloudinary.com/test-cloud/raw/upload/example.pdf");
-    expect(cloudinary.v2.uploader.upload_stream).toHaveBeenCalledWith(
-      { resource_type: "auto" },
-      expect.any(Function)
-    );
-  });
-
-  it("should return an error if no file is uploaded", async () => {
-    // Mock request data with no file
-    const formData = new FormData();
-    const mockRequest = {
-      formData: jest.fn().mockResolvedValue(formData),
-    };
-
-    // Call the API
-    const response = await POST(mockRequest as any);
-
-    // Assertions
-    expect(response.status).toBe(400);
-    const json = await response.json();
-    expect(json.error).toBe("No file uploaded");
-  });
-
-  it("should handle Cloudinary upload errors", async () => {
-    // Mock a file in memory
-    const fileContent = Buffer.from("This is a test PDF file content.", "utf-8");
-    const file = new File([fileContent], "example.pdf", {
-      type: "application/pdf",
+    expect(await response.json()).toEqual({
+      url: "https://mocked-url.com/file.jpg"
     });
+  });
 
-    // Mock arrayBuffer() method
-    file.arrayBuffer = jest.fn().mockResolvedValue(fileContent);
+  it("rejects missing files", async () => {
+    const response = await POST(new NextRequest("http://localhost", {
+      method: "POST",
+      body: new FormData(),
+    }));
 
-    // Create FormData
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "No file uploaded"
+    });
+  });
+
+  it("handles Cloudinary errors", async () => {
+    // Override Cloudinary mock to simulate error
+    const cloudinary = require("cloudinary").v2;
+    cloudinary.uploader.upload_stream.mockImplementationOnce((options: any, callback: any) => ({
+      end: jest.fn().mockImplementation(() => {
+        callback(new Error("Cloudinary error"), null);
+      })
+    }));
+
+    const file = new File(["test"], "test.txt");
     const formData = new FormData();
     formData.append("file", file);
 
-    const mockRequest = {
-      formData: jest.fn().mockResolvedValue(formData),
-    };
+    const response = await POST(new NextRequest("http://localhost", {
+      method: "POST",
+      body: formData,
+    }));
 
-    // Mock Cloudinary error
-    (cloudinary.v2.uploader.upload_stream as jest.Mock).mockImplementation(
-      (
-        options: Record<string, any>,
-        callback: (error: Error | null, result?: any) => void
-      ) => {
-        callback(new Error("Cloudinary upload failed"), null);
-        return { end: jest.fn() };
-      }
-    );
-
-    // Call the API
-    const response = await POST(mockRequest as any);
-
-    // Assertions
     expect(response.status).toBe(500);
-    const json = await response.json();
-    expect(json.error).toBe("Upload failed");
+    expect(await response.json()).toEqual({
+      error: "Upload failed"
+    });
+  });
+
+  it("handles form data errors", async () => {
+    const response = await POST(new NextRequest("http://localhost", {
+      method: "POST",
+      body: "invalid-body",
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "Upload failed"
+    });
   });
 });

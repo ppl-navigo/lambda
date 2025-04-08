@@ -1,58 +1,79 @@
 "use client";
 
-import { useState, useRef } from "react";
-import axios from "axios";
+import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "../../components/ui/button";
-import { useMouStore } from "@/app/store/useMouStore";
+import { Textarea } from "../../components/ui/textarea";
+import { Pencil, Save } from "lucide-react"; // 🧠 Import ikon dari lucide
 
 interface StreamerProps {
   pdfUrl: string;
 }
 
 const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
-  const { pagesContent } = useMouStore(); 
-  const [editedPdfUrl, setEditedPdfUrl] = useState<string | null>(null);
+  const [revisedText, setRevisedText] = useState<string>("");
+  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showEdited, setShowEdited] = useState(false);
-  const iframeSrcRef = useRef<string>(pdfUrl);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleGenerateEditedPdf = async () => {
+  const handleGenerateEditedText = async () => {
+    if (revisedText) {
+      setShowEdited(true);
+      return;
+    }
+
     setLoading(true);
-    setShowEdited(false); // Optional: hide while loading
+    setRevisedText("");
 
     try {
-      const response = await axios.post("/api/mou-revision", {
-        pdfUrl,
-        pagesContent,
+      const response = await fetch("/api/mou-revision", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ pdfUrl }),
       });
 
-      if (response.status === 200) {
-        const newUrl = response.data.editedPdfUrl;
+      if (!response.body) throw new Error("No response body");
 
-        // 🔄 Only update if URL has changed
-        if (newUrl !== iframeSrcRef.current) {
-          iframeSrcRef.current = newUrl;
-          setEditedPdfUrl(newUrl);
-          setShowEdited(true);
-        } else {
-          // Same URL, just switch back to view
-          setShowEdited(true);
-        }
+      setShowEdited(true);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        setRevisedText((prev) => prev + chunk);
       }
+
+      console.log("✅ Full Revised Text:", fullText.substring(0, 1000));
     } catch (error) {
-      console.error("❌ Error generating edited PDF:", error);
+      console.error("❌ Error generating revised text:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const currentPdfUrl = showEdited && editedPdfUrl ? editedPdfUrl : pdfUrl;
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+    }
+  }, [revisedText, isEditing]);
+
+  const handleToggleEdit = () => {
+    setIsEditing((prev) => !prev);
+  };
 
   return (
-    <div className="h-full w-full bg-gray-900 border-l border-gray-700 transition-all duration-300 flex flex-col">
-      {/* 🔹 Navbar-like buttons with separator */}
+    <div className="h-full w-full bg-gray-900 border-l border-gray-700 transition-all duration-300 flex flex-col relative">
+      {/* Topbar */}
       <div className="flex w-full border-b border-gray-700">
-        {/* Left Button - Original PDF */}
         <Button
           className={`flex-1 px-4 py-2 bg-black text-white ${!showEdited ? "bg-gray-800" : "bg-gray-600"}`}
           onClick={() => setShowEdited(false)}
@@ -60,29 +81,58 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
           Original PDF
         </Button>
 
-        {/* Divider Line */}
         <div className="border-l border-gray-700 h-full"></div>
 
-        {/* Right Button - Edited PDF */}
         <Button
           className={`flex-1 px-4 py-2 bg-black text-white ${showEdited ? "bg-gray-800" : "bg-gray-600"}`}
-          onClick={handleGenerateEditedPdf}
+          onClick={handleGenerateEditedText}
           disabled={loading}
         >
-          {loading ? "Processing..." : editedPdfUrl ? "Edited PDF" : "Generate Edited PDF"}
+          {loading ? "Processing..." : revisedText ? "Revised Text" : "Generate Revised Text"}
         </Button>
       </div>
 
-      {/* 🔹 Tampilkan PDF (original atau hasil revisi) */}
-      <iframe
-        key={currentPdfUrl} // force refresh only when URL truly changes
-        src={currentPdfUrl}
-        className="w-full h-full"
-        title="PDF Viewer"
-      ></iframe>
+      {/* Floating Edit/Save Button */}
+      {showEdited && revisedText && (
+        <div className="fixed bottom-[10px] right-[20px] z-50">
+          <Button
+            onClick={handleToggleEdit}
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-md p-2"
+            size="icon"
+          >
+            {isEditing ? <Save className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
+          </Button>
+        </div>
+      )}
+
+      {/* Content Viewer */}
+      <div className="flex-1 overflow-auto p-4">
+        {!showEdited ? (
+          <iframe src={pdfUrl} className="w-full h-full border rounded" title="Original PDF" />
+        ) : revisedText ? (
+          <div className="space-y-4">
+            {!isEditing ? (
+              <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                <ReactMarkdown>{revisedText}</ReactMarkdown>
+              </div>
+            ) : (
+              <Textarea
+                ref={textareaRef}
+                className="w-full font-sans text-white bg-transparent border-none shadow-none resize-none focus:outline-none focus:ring-0 p-0 leading-relaxed whitespace-pre-wrap"
+                value={revisedText}
+                onChange={(e) => setRevisedText(e.target.value)}
+                rows={1}
+              />
+            )}
+          </div>
+        ) : loading ? (
+          <p className="text-gray-400 animate-pulse">Generating revised text...</p>
+        ) : (
+            <p className="text-red-500">There was an error generating the revised text.</p>
+        )}
+      </div>
     </div>
   );
 };
-
 
 export default Streamer;
