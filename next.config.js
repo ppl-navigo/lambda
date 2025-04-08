@@ -37,5 +37,12 @@ module.exports = withSentryConfig(
     eslint: {
       ignoreDuringBuilds: true,
     },
+    webpack(config) {
+      config.module?.rules.push({
+        test: /\.node$/,
+        use: 'node-loader',
+      });
+      return config;
+    },
   }
 );
