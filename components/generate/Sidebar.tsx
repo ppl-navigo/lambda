@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Document } from "./DocumentObject";
 import { FaDownload } from "react-icons/fa";
 import { Toaster } from "react-hot-toast";
+
+export interface Document {
+  title: string;
+  content: string;
+  time: string;
+}
 
 interface SidebarProps {
   isSidebarVisible: boolean;

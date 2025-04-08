@@ -6,11 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "jest --coverage --coverageReporters=lcov",
-    "test:ci": "jest --runInBand",
-    "postbuild": "sentry-cli releases files coverage-report upload-sourcemaps .next --dist cov --project navigo",
-    "test:coverage": "jest --coverage"
+    "lint": "next lint"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.1.17",
@@ -52,6 +48,7 @@
     "react-day-picker": "8.10.1",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.3.8",
+    "react-hot-toast": "^2.5.2",
     "react-icons": "^5.5.0",
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",

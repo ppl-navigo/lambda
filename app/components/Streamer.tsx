@@ -8,6 +8,8 @@ import { Pencil, Save } from "lucide-react"; // 🧠 Import ikon dari lucide
 
 interface StreamerProps {
   pdfUrl: string;
+  editedPdfUrl: string | null;
+  setEditedPdfUrl: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {

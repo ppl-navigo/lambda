@@ -8,6 +8,7 @@ import MarkdownViewer from "../components/MarkdownViewer";
 
 const MouAnalyzer = () => {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [editedPdfUrl, setEditedPdfUrl] = useState<string | null>(null); // ✅ Tambahkan state ini
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
   return (
@@ -34,7 +35,11 @@ const MouAnalyzer = () => {
                 <MarkdownViewer pdfUrl={pdfUrl} />
               </div>
               <div className="col-span-2 overflow-y-auto">
-                <Streamer pdfUrl={pdfUrl} />
+                <Streamer
+                  pdfUrl={pdfUrl}
+                  editedPdfUrl={editedPdfUrl}
+                  setEditedPdfUrl={setEditedPdfUrl}
+                />
               </div>
             </div>
           )}
