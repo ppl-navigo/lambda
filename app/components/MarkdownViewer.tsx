@@ -278,7 +278,7 @@ const processDocument = useCallback(async () => {
   } finally {
     setLoading(false);
   }
-}, [pdfUrl, downloadFileAndExtractText]);
+}, [pdfUrl, downloadFileAndExtractText, analyzeTextWithAI, pagesContent, setPagesContent, setRiskyClauses]);
 
   const cleanText = (text: string) => {
     return text.replace(/\*\*/g, "").trim();
@@ -393,22 +393,25 @@ const processDocument = useCallback(async () => {
         ...prevMessages,
         { role: "user", content: userMessage },
       ]);
-
+  
       const revisedText = await generateRevisionWithAI(risk.originalClause, risk.reason);
-
+  
       setChatMessages((prevMessages) => [
         ...prevMessages,
-        { role: "assistant", content: `Berikut adalah perbaikan yang disarankan:\n\n${revisedText}`},
+        {
+          role: "assistant",
+          content: `Berikut adalah perbaikan yang disarankan:\n\n${revisedText}`,
+        },
       ]);
-
+  
       setRisks((prevRisks) =>
         prevRisks.map((r) =>
           r === risk ? { ...r, revisedClause: revisedText } : r
         )
       );
     },
-    [generateRevisionWithAI]
-  );
+    [generateRevisionWithAI] // ✅ Hanya ini yang digunakan
+  );  
 
   return (
     <div className="grid grid-cols-2 gap-4 h-screen">
