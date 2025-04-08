@@ -142,13 +142,12 @@ export function ChatPage() {
     <div className="flex h-screen bg-background dark">
       {/* Sidebar */}
       <div
-        className={`${
-          sidebarOpen ? "w-80" : "w-0"
-        } bg-muted transition-all duration-300 overflow-hidden flex flex-col h-full border-r`}
+        className={`${sidebarOpen ? "w-80" : "w-0"
+          } bg-muted transition-all duration-300 overflow-hidden flex flex-col h-full border-r`}
       >
         <div className="p-4 border-b">
-          <Button className="w-full" variant="outline">
-            <Plus className="mr-2 h-4 w-4 text-white" /> 
+          <Button onClick={createNewChat} className="w-full" variant="outline">
+            <Plus className="mr-2 h-4 w-4 text-white" />
             <span className="text-white">New Chat</span>
           </Button>
         </div>

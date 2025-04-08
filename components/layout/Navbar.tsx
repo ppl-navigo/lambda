@@ -20,26 +20,27 @@ export function Navbar() {
           </Link>
         </div>
         <nav className="ml-6 hidden md:flex gap-4">
-          <Link href="/">
-            <Button variant="ghost" className="text-white h-8 px-2">
+          <Button variant="ghost" className="text-white h-8 px-2">
+            <Link href="/">
               Dashboard
-            </Button>
-          </Link>
-          <Link href="/generate">
-            <Button variant="ghost" className="text-zinc-400 h-8 px-2">
-              Documents
-            </Button>
-          </Link>
-          <Link href="/analyze">
-            <Button variant="ghost" className="text-zinc-400 h-8 px-2">
-              Contracts
-            </Button>
-          </Link>
-          <Link href="/chat">
-            <Button variant="ghost" className="text-zinc-400 h-8 px-2">
+            </Link>
+          </Button>
+          <Button variant="ghost" className="text-zinc-400 h-8 px-2">
+            Documents
+          </Button>
+          <Button variant="ghost" className="text-zinc-400 h-8 px-2">
+            Contracts
+          </Button>
+          <Button variant="ghost" className="text-zinc-400 h-8 px-2">
+            <Link href="/chat">
               Assistant
-            </Button>
-          </Link>
+            </Link>
+          </Button>
+          <Button variant="ghost" className="text-zinc-400 h-8 px-2">
+            <Link href="/search">
+              Search
+            </Link>
+          </Button>
         </nav>
         <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 md:hidden">
           <Menu className="h-4 w-4" />
