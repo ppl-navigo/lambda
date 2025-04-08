@@ -11,7 +11,7 @@ global.fetch = jest.fn();
 // Mock react-markdown
 jest.mock('react-markdown', () => ({
   __esModule: true,
-  default: ({ children }) => <div>{children}</div>, // Simulasikan ReactMarkdown sebagai komponen sederhana
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 // Mock remark-gfm (jika digunakan oleh react-markdown)
@@ -55,7 +55,7 @@ describe('Streamer component', () => {
       }),
     };
 
-    global.fetch.mockResolvedValueOnce(mockResponse);
+    (global.fetch as jest.Mock).mockResolvedValueOnce(mockResponse);
 
     render(<Streamer pdfUrl={pdfUrl} />);
 
@@ -79,7 +79,7 @@ describe('Streamer component', () => {
       }),
     };
 
-    global.fetch.mockResolvedValueOnce(mockResponse);
+    (global.fetch as jest.Mock).mockResolvedValueOnce(mockResponse);
 
     render(<Streamer pdfUrl={pdfUrl} />);
 
