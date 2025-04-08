@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../../components/generate/Sidebar";
 import DocumentViewer from "../../components/generate/DocumentViewer";
 import { Document } from "../../components/generate/DocumentObject";
+import { supabase } from "@/utils/supabase";
+
+interface SupabaseDocument {
+  title: string;
+  content: string;
+  created_at: string;
+  document_type: string;
+}
 
 const documents: Document[] = [
   {
@@ -44,8 +52,38 @@ Versi sebelumnya dari kontrak kerja Navigo, dengan klausul yang sedikit berbeda 
 ];
 
 const DocumentHistory = () => {
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [viewedDocumentString, setViewedDocumentString] = useState<string | null>(null);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  const fetchDocuments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching documents:', error);
+        return;
+      }
+
+      if (data) {
+        const formattedDocs = data.map((doc: SupabaseDocument) => ({
+          title: doc.title,
+          time: new Date(doc.created_at).toLocaleString(),
+          content: doc.content,
+        }));
+        setDocuments(formattedDocs);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
 
   return (
     <div className="bg-black text-white h-screen flex">
