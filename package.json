@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest --coverage --coverageReporters=lcov",
+    "test:ci": "jest --runInBand",
+    "postbuild": "sentry-cli releases files coverage-report upload-sourcemaps .next --dist cov --project navigo",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.1.17",
