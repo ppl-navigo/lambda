@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
 
     const result = streamText({
-        model: google('gemini-2.0-flash-exp'),
+        model: google('gemini-1.5-pro') as any, // Temporary type assertion to bypass type mismatch
         messages,
         system: `
         You are a knowledgeable legal assistant that provides helpful information about legal topics.

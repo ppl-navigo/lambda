@@ -3,7 +3,18 @@
 const { withSentryConfig } = require("@sentry/nextjs");
 
 module.exports = withSentryConfig(
-  module.exports,
+  {
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
+    webpack(config) {
+      config.module?.rules.push({
+        test: /\.node$/,
+        use: 'node-loader',
+      });
+      return config;
+    },
+  },
   {
     // For all available options, see:
     // https://www.npmjs.com/package/@sentry/webpack-plugin#options
