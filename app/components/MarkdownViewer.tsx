@@ -8,7 +8,7 @@ import { useCallback } from "react";
 import ReactMarkdown from "react-markdown"; // Importing react-markdown
 import remarkGfm from "remark-gfm"; 
 import remarkBreaks from 'remark-breaks';
-import { useMouStore, RiskyClause, PageSection  } from "@/app/store/useMouStore";
+import { useMouStore, RiskyClause } from "@/app/store/useMouStore";
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
@@ -34,7 +34,7 @@ export const RiskItem: React.FC<{ risk: RiskyClause; onRevise: (risk: RiskyClaus
   return (
     <div className="mb-4 border-b border-gray-700 pb-2">
       <div className="flex justify-between items-start cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <h3 className="text-lg font-semibold">📌 {risk.title}</h3>
+        <h3 className="text-base font-semibold">📌 {risk.title}</h3>
         <button className="text-sm text-blue-400 focus:outline-none mt-1">
           {expanded ? "Collapse" : "Expand"}
         </button>
@@ -74,16 +74,16 @@ export const RiskItem: React.FC<{ risk: RiskyClause; onRevise: (risk: RiskyClaus
 const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) => {
   const {
     pagesContent,
-    riskyClauses,
     setPagesContent,
     setRiskyClauses,
   } = useMouStore();
-
+  
   const [risks, setRisks] = useState<RiskyClause[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [processedPages, setProcessedPages] = useState<number[]>([]);
 
   const downloadFileAndExtractText = useCallback(async (fileUrl: string) => {
     try {
@@ -154,7 +154,7 @@ Klausul {judul}: "{kalimat atau kata-kata berisiko}"
 Alasan: "{penjelasan mengapa klausul ini berisiko}"
 \`\`\`
 
-Jangan lupa berikan jawaban beserta dengan newline untuk readibility
+Jangan lupa berikan jawaban beserta dengan newline untuk readibility. Pastikan untuk judul tidak boleh sama
 
 Jika dokumen memiliki bahasa yang tidak dikenali, tampilkan pesan: "Bahasa tidak didukung". Jika tidak ditemukan klausul berisiko, tampilkan pesan: "Tidak ditemukan klausul yang dapat dianalisis". Jika terjadi kesalahan sistem, tampilkan pesan: "Gagal menganalisis dokumen, coba lagi nanti".
 
@@ -204,9 +204,7 @@ Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta a
 
           // Directly append the chunk (which is plain text) to the accumulated response
           accumulatedResponse += chunk
-          // console.log("Received chunk:", chunk);
-          // console.log(accumulatedResponse);
-          // Add the streamed response to the chat
+
           setChatMessages((prevMessages) => {
             const lastMessage = prevMessages[prevMessages.length - 1];
             if (lastMessage?.role === "assistant") {
@@ -272,6 +270,7 @@ const processDocument = useCallback(async () => {
       }
 
       // ✅ If no risks, you can add a "clean" section note if needed
+      setProcessedPages((prev) => [...prev, sectionNumber]);
     }
   } catch (err) {
     console.error("❌ Gagal menganalisis dokumen:", err);
@@ -304,7 +303,14 @@ const processDocument = useCallback(async () => {
 
   const organizeTextWithLLM = async (text: string): Promise<string> => {
     const systemPrompt = `
-  Susun ulang teks dokumen berikut agar terlihat rapi dan profesional untuk ditampilkan kembali. Gunakan format markdown, tetapi jangan ada format tabel. Pastikan setiap poin atau bagian memiliki pemisahan yang jelas. Jangan menghilangkan struktur asli dokumen, seperti judul, subjudul, dan pemisahan antara bagian. 
+Susun ulang teks dokumen berikut agar terlihat rapi dan profesional untuk ditampilkan kembali. Pertahankan struktur asli dokumen seperti judul, subjudul, poin-poin, dan numbering. Gunakan bahasa yang formal namun tidak terlalu kaku dan jangan mengubah isi asli. Gunakan format markdown, tetapi jangan ada format tabel.
+
+Format output harus:
+- Kalau ada newline hanya boleh ada satu tidak boleh lebih
+- Poin-poin tetap rapi dan mudah dibaca
+- Judul/subjudul tetap ditandai dengan jelas
+
+Jangan tambahkan bagian atau komentar yang tidak diminta.
   `;
   
     const response = await fetch("/api/mou-analyzer", {
@@ -414,10 +420,10 @@ const processDocument = useCallback(async () => {
   return (
     <div className="grid grid-cols-2 gap-4 h-screen">
       <div className="bg-[#1A1A1A] text-white p-4 rounded-md overflow-y-auto">
-        {loading && <FaSpinner data-testid="spinner" className="text-4xl animate-spin" />}
+        {loading && processedPages.length === 0 && <FaSpinner data-testid="spinner" className="text-4xl animate-spin" />}
         {error && <p>{error}</p>}
         {!loading && !error && risks.length === 0 && <p>No risks found.</p>}
-        {!loading && Object.entries(
+        {Object.entries(
           risks.reduce((acc, risk) => {
             acc[risk.sectionNumber] = acc[risk.sectionNumber] || [];
             acc[risk.sectionNumber].push(risk);
@@ -425,13 +431,12 @@ const processDocument = useCallback(async () => {
           }, {} as Record<number, RiskyClause[]>)
         ).map(([sectionNumber, group]) => (
           <div key={sectionNumber} className="mb-6">
-            <h2 className="text-xl font-bold mb-2 text-blue-300">📄 Page {sectionNumber}</h2>
+            <h2 className="text-base font-bold mb-2 text-blue-300">📄 Page {sectionNumber}</h2>
             {group.map((risk, index) => (
               <RiskItem key={index} risk={risk} onRevise={handleRevise} />
             ))}
           </div>
         ))}
-
       </div>
       <div className="bg-gray-800 text-white p-4 rounded-md overflow-y-auto">
         <h3 className="text-lg font-semibold mb-2">AI Chat:</h3>
