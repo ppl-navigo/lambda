@@ -1,18 +1,19 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
 import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
-import { Pencil, Save } from "lucide-react"; // 🧠 Import ikon dari lucide
+import { Pencil, Save, RefreshCcw } from "lucide-react"; // Add RefreshCcw icon
+import { useMouStore } from "@/app/store/useMouStore";
+import MarkdownRenderer from "../utils/markdownRenderer";
+import { TextStreamer } from "../utils/textStreamer";
 
 interface StreamerProps {
   pdfUrl: string;
-  editedPdfUrl: string | null;
-  setEditedPdfUrl: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
+  const { pagesContent, updatePageContent } = useMouStore(); // Subscribe to pagesContent and its version
   const [revisedText, setRevisedText] = useState<string>("");
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,46 +21,22 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleGenerateEditedText = async () => {
-    if (revisedText) {
-      setShowEdited(true);
-      return;
-    }
-
     setLoading(true);
+    setShowEdited(true);
     setRevisedText("");
-
+  
     try {
-      const response = await fetch("/api/mou-revision", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ pdfUrl }),
-      });
-
-      if (!response.body) throw new Error("No response body");
-
-      setShowEdited(true);
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let fullText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        fullText += chunk;
+      const fullText = pagesContent
+        .map((page) => `---PAGE_START_${page.sectionNumber}---\n${page.content}`)
+        .join("\n");
+  
+      TextStreamer.simulateStream(fullText, 1000, 100, (chunk) => {
         setRevisedText((prev) => prev + chunk);
-      }
-
-      console.log("✅ Full Revised Text:", fullText.substring(0, 1000));
-    } catch (error) {
-      console.error("❌ Error generating revised text:", error);
+      });
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -69,8 +46,27 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
   }, [revisedText, isEditing]);
 
   const handleToggleEdit = () => {
+    if (isEditing) {
+      // Saving: parse revisedText and update the store
+      const updatedSections = revisedText
+        .split(/---PAGE_START_(\d+)---/)
+        .filter((_, i) => i > 0) // remove any junk before the first marker
+        .reduce<{ sectionNumber: number; content: string }[]>((acc, curr, idx, arr) => {
+          if (idx % 2 === 0) {
+            const sectionNumber = parseInt(curr);
+            const content = arr[idx + 1]?.trim() ?? "";
+            acc.push({ sectionNumber, content });
+          }
+          return acc;
+        }, []);
+  
+      updatedSections.forEach(({ sectionNumber, content }) => {
+        updatePageContent(sectionNumber, content);
+      });
+    }
+  
     setIsEditing((prev) => !prev);
-  };
+  };  
 
   return (
     <div className="h-full w-full bg-gray-900 border-l border-gray-700 transition-all duration-300 flex flex-col relative">
@@ -94,16 +90,30 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
         </Button>
       </div>
 
-      {/* Floating Edit/Save Button */}
-      {showEdited && revisedText && (
-        <div className="fixed bottom-[10px] right-[20px] z-50">
-          <Button
-            onClick={handleToggleEdit}
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-md p-2"
-            size="icon"
-          >
-            {isEditing ? <Save className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
-          </Button>
+      {/* Floating Buttons */}
+      {showEdited && (
+        <div className="fixed bottom-[10px] right-[0px] z-50 flex justify-end w-full pr-6">
+          <div className="flex ml-auto space-x-2">
+            {/* Reload Button - Shown only when showEdited is true */}
+            <Button
+              onClick={handleGenerateEditedText}
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-md p-2"
+              size="icon"
+            >
+              <RefreshCcw className="w-5 h-5" />
+            </Button>
+
+            {/* Edit/Save Button - Only shown if revisedText exists */}
+            {revisedText && useMouStore.getState().riskyClauses.length > 0 && (
+              <Button
+                onClick={handleToggleEdit}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-md p-2"
+                size="icon"
+              >
+                {isEditing ? <Save className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -111,27 +121,74 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
       <div className="flex-1 overflow-auto p-4">
         {!showEdited ? (
           <iframe src={pdfUrl} className="w-full h-full border rounded" title="Original PDF" />
-        ) : revisedText ? (
+        ) : revisedText && useMouStore.getState().riskyClauses.length > 0 ? (
           <div className="space-y-4">
             {!isEditing ? (
-              <div className="prose prose-invert max-w-none whitespace-pre-wrap">
-                <ReactMarkdown>{revisedText}</ReactMarkdown>
-              </div>
+              <>
+                <MarkdownRenderer text={revisedText} />
+                {/* Add a gap at the end of the revised text */}
+                <div className="h-8" />
+              </>
             ) : (
-              <Textarea
-                ref={textareaRef}
-                className="w-full font-sans text-white bg-transparent border-none shadow-none resize-none focus:outline-none focus:ring-0 p-0 leading-relaxed whitespace-pre-wrap"
-                value={revisedText}
-                onChange={(e) => setRevisedText(e.target.value)}
-                rows={1}
-              />
+              <>
+                {revisedText
+                  .split(/---PAGE_START_(\d+)---/)
+                  .filter((_, i) => i > 0)
+                  .reduce<JSX.Element[]>((acc, curr, idx, arr) => {
+                    if (idx % 2 === 0) {
+                      const sectionNumber = parseInt(curr);
+                      const content = arr[idx + 1]?.trim() ?? "";
+
+                      acc.push(
+                        <div key={`edit-page-${sectionNumber}`} className="mb-6">
+                          <div className="text-sm text-blue-400 font-semibold mb-2">
+                            Page {sectionNumber}
+                          </div>
+                          <Textarea
+                            className="w-full font-sans text-white bg-transparent border border-gray-700 rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 p-2 leading-relaxed whitespace-pre-wrap"
+                            value={content}
+                            onChange={(e) => {
+                              const updated = revisedText
+                                .split(/---PAGE_START_(\d+)---/)
+                                .filter((_, i) => i > 0)
+                                .reduce((textAcc, val, i, arr) => {
+                                  if (i % 2 === 0) {
+                                    const pageNum = val;
+                                    const contentValue =
+                                      parseInt(pageNum) === sectionNumber
+                                        ? e.target.value
+                                        : arr[i + 1] ?? "";
+                                    return (
+                                      textAcc +
+                                      `---PAGE_START_${pageNum}---\n` +
+                                      contentValue.trim() +
+                                      "\n"
+                                    );
+                                  }
+                                  return textAcc;
+                                }, "");
+
+                              setRevisedText(updated.trim());
+                            }}
+                            rows={Math.max(3, content.split("\n").length)}
+                          />
+                        </div>
+                      );
+                    }
+                    return acc;
+                  }, [])}
+              </>
             )}
           </div>
         ) : loading ? (
           <p className="text-gray-400 animate-pulse">Generating revised text...</p>
+        ) : pagesContent.length === 0 ? (
+          <p className="text-yellow-400">No content loaded yet.</p>
+        ) : useMouStore.getState().riskyClauses.length === 0 ? (
+          <p className="text-green-400">No risky clauses found. This document may not need any revisions.</p>
         ) : (
-            <p className="text-red-500">There was an error generating the revised text.</p>
-        )}
+          <p className="text-yellow-400">No content loaded yet.</p>
+        )}   
       </div>
     </div>
   );
