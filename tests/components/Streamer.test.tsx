@@ -1,11 +1,19 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import Streamer from '@/app/components/Streamer';
 import '@testing-library/jest-dom';
+
+// Mock TextStreamer
+jest.mock('../../app/utils/textStreamer', () => ({
+  TextStreamer: {
+    simulateStream: jest.fn((text, delay, chunkSize, callback) => {
+      // Immediately call callback with the text
+      callback(text);
+      return Promise.resolve();
+    }),
+  },
+}));
 
 // Mock ReadableStream for Jest
 global.ReadableStream = require('web-streams-polyfill').ReadableStream;
-
-// Mock fetch API
 global.fetch = jest.fn();
 
 // Mock react-markdown
@@ -14,90 +22,122 @@ jest.mock('react-markdown', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-// Mock remark-gfm (jika digunakan oleh react-markdown)
 jest.mock('remark-gfm', () => jest.fn());
-
-// Mock remark-breaks (jika digunakan oleh react-markdown)
 jest.mock('remark-breaks', () => jest.fn());
 
-// Mock lucide-react (jika digunakan untuk ikon)
+// Mock icons
 jest.mock('lucide-react', () => ({
   Pencil: () => <svg data-testid="pencil-icon" />,
   Save: () => <svg data-testid="save-icon" />,
-}));
-
-// Mock pdfjs-dist (jika digunakan untuk PDF processing)
-jest.mock('pdfjs-dist', () => ({
-  getDocument: jest.fn(() => Promise.resolve({})),
+  RefreshCcw: () => <svg data-testid="refresh-icon" />,
 }));
 
 describe('Streamer component', () => {
-  const pdfUrl = 'http://example.com/test.pdf';
+  const renderWithStore = (override = {}) => {
+    Object.assign(mockState, override);
+    render(<Streamer pdfUrl="http://example.com/test.pdf" />);
+  };
+  
+  let mockUseMouStore: any;
+  let mockState: any;
+  let Streamer: any;
 
-  beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-  });
-
-  test('renders an iframe with the correct src when showing original PDF', () => {
-    render(<Streamer pdfUrl={pdfUrl} />);
-    const iframeElement = screen.getByTitle('Original PDF');
-    expect(iframeElement).toHaveAttribute('src', pdfUrl);
-  });
-
-  test('fetches and displays revised text when "Generate Revised Text" button is clicked', async () => {
-    const mockResponse = {
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode('Revised text chunk'));
-          controller.close();
-        },
-      }),
+  beforeAll(() => {
+    mockState = {
+      pagesContent: [],
+      riskyClauses: [],
+      setPagesContent: jest.fn(),
+      setRiskyClauses: jest.fn(),
+      updatePageContent: jest.fn(),
     };
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce(mockResponse);
+    mockUseMouStore = jest.fn(() => mockState);
+    mockUseMouStore.getState = () => mockState;
 
-    render(<Streamer pdfUrl={pdfUrl} />);
+    jest.doMock('@/app/store/useMouStore', () => ({
+      useMouStore: mockUseMouStore,
+    }));
 
-    // Click "Generate Revised Text" button
+    Streamer = require('@/app/components/Streamer').default;
+  });
+
+  test('renders iframe for original PDF', () => {
+    renderWithStore();
+    const iframe = screen.getByTitle('Original PDF');
+    expect(iframe).toHaveAttribute('src', "http://example.com/test.pdf");
+  });
+
+  test('shows "No content loaded yet" if no pagesContent', () => {
+    renderWithStore();
+    fireEvent.click(screen.getByText(/Generate Revised Text/i));
+    expect(screen.getByText(/No content loaded yet/i)).toBeInTheDocument();
+  });
+
+  test('shows "No risky clauses found" if pagesContent exists but riskyClauses is empty', () => {
+    renderWithStore({
+      pagesContent: [{ sectionNumber: 1, content: 'Sample text' }],
+      riskyClauses: [],
+    });
+
+    fireEvent.click(screen.getByText(/Generate Revised Text/i));
+    expect(screen.getByText(/No risky clauses found/i)).toBeInTheDocument();
+  });
+
+  test('generates and displays revised text', async () => {
+    // Set up the initial state with content and risky clauses
+    renderWithStore({
+      pagesContent: [{ sectionNumber: 1, content: 'Original content' }],
+      riskyClauses: [{ sectionNumber: 1, title: '', originalClause: '', reason: '' }],
+    });
+
+    // Click the "Generate Revised Text" button
     fireEvent.click(screen.getByText(/Generate Revised Text/i));
 
-    // Wait for loading state to finish
-    await waitFor(() => expect(screen.queryByText(/Processing.../i)).not.toBeInTheDocument());
+    // Wait for the loading state to finish
+    await waitFor(() => {
+      expect(screen.queryByText(/Processing.../i)).not.toBeInTheDocument();
+    });
 
-    // Check if revised text is displayed
-    expect(screen.getByText(/Revised text chunk/i)).toBeInTheDocument();
-  });
+    // Since we're using MarkdownRenderer, we need to look for the content within the rendered markdown
+    await waitFor(() => {
+      const pageContent = screen.getByText(/Original content/i);
+      expect(pageContent).toBeInTheDocument();
+    });
 
-  test('enables editing mode and updates revised text', async () => {
-    const mockResponse = {
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode('Initial revised text'));
-          controller.close();
-        },
-      }),
-    };
+    // Verify that the revision buttons are visible
+    expect(screen.getByTestId('refresh-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('pencil-icon')).toBeInTheDocument();
+  });    
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce(mockResponse);
-
-    render(<Streamer pdfUrl={pdfUrl} />);
+  test('allows editing of revised text in textareas', async () => {
+    // Initial state with content and risky clauses to enable editing
+    renderWithStore({
+      pagesContent: [{ sectionNumber: 1, content: 'Original content' }],
+      riskyClauses: [{ sectionNumber: 1, title: '', originalClause: '', reason: '' }],
+    });
 
     // Generate revised text
     fireEvent.click(screen.getByText(/Generate Revised Text/i));
-    await waitFor(() => expect(screen.queryByText(/Processing.../i)).not.toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.queryByText(/Processing.../i)).not.toBeInTheDocument();
+    });
 
-    // Enable editing mode
-    fireEvent.click(screen.getByTestId('pencil-icon')); // Pencil icon
-    const textarea = screen.getByRole('textbox');
+    // Toggle edit mode
+    fireEvent.click(screen.getByTestId('pencil-icon'));
+
+    // Textarea should be present with initial content
+    const textarea = screen.getByDisplayValue(/Original content/i);
     expect(textarea).toBeInTheDocument();
 
-    // Update revised text
-    fireEvent.change(textarea, { target: { value: 'Updated revised text' } });
-    expect(textarea).toHaveValue('Updated revised text');
+    // Simulate user editing the content
+    fireEvent.change(textarea, { target: { value: 'Edited content' } });
 
-    // Save changes
-    fireEvent.click(screen.getByTestId('save-icon')); // Save icon
-    expect(screen.getByText(/Updated revised text/i)).toBeInTheDocument();
+    // Save the changes
+    fireEvent.click(screen.getByTestId('save-icon'));
+
+    // Verify that the updatePageContent function was called with the updated content
+    await waitFor(() => {
+      expect(mockState.updatePageContent).toHaveBeenCalledWith(1, 'Edited content');
+    });
   });
 });
