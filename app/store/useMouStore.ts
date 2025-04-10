@@ -19,6 +19,7 @@ interface MouStore {
   riskyClauses: RiskyClause[];
   setPagesContent: (pages: PageSection[]) => void;
   setRiskyClauses: (risks: RiskyClause[]) => void;
+  updatePageContent: (sectionNumber: number, newContent: string) => void; // Add this function
 }
 
 export const useMouStore = create<MouStore>((set) => ({
@@ -27,9 +28,15 @@ export const useMouStore = create<MouStore>((set) => ({
   setPagesContent: (newPages) =>
     set((state) => ({
       pagesContent: [...state.pagesContent, ...newPages],
-    })),  
+    })),
   setRiskyClauses: (risks) =>
     set((state) => ({
       riskyClauses: [...state.riskyClauses, ...risks],
+    })),
+  updatePageContent: (sectionNumber, newContent) =>
+    set((state) => ({
+      pagesContent: state.pagesContent.map((page) =>
+        page.sectionNumber === sectionNumber ? { ...page, content: newContent } : page
+      ),
     })),
 }));
