@@ -21,22 +21,40 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleGenerateEditedText = async () => {
-    setLoading(true);
+    // Hanya generate jika belum ada revised text
+    if (!revisedText) {
+      setLoading(true);
+      try {
+        const fullText = pagesContent
+          .map((page) => `---PAGE_START_${page.sectionNumber}---\n${page.content}`)
+          .join("\n");
+        
+        TextStreamer.simulateStream(fullText, 1000, 100, (chunk) => {
+          setRevisedText((prev) => prev + chunk);
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
     setShowEdited(true);
-    setRevisedText("");
-  
+  };
+
+  const handleRefreshRevisedText = async () => {
+    setLoading(true);
     try {
       const fullText = pagesContent
         .map((page) => `---PAGE_START_${page.sectionNumber}---\n${page.content}`)
         .join("\n");
-  
+      
+      // Force refresh dengan reset text
+      setRevisedText("");
       TextStreamer.simulateStream(fullText, 1000, 100, (chunk) => {
         setRevisedText((prev) => prev + chunk);
       });
     } finally {
       setLoading(false);
     }
-  };  
+  };
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -44,6 +62,15 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
     }
   }, [revisedText, isEditing]);
+
+  useEffect(() => {
+    if (showEdited && !loading && !isEditing) {
+      const newText = pagesContent
+        .map(p => `---PAGE_START_${p.sectionNumber}---\n${p.content}`)
+        .join('\n');
+      setRevisedText(newText);
+    }
+  }, [pagesContent, showEdited, loading, isEditing]);
 
   const handleToggleEdit = () => {
     if (isEditing) {
@@ -86,7 +113,7 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
           onClick={handleGenerateEditedText}
           disabled={loading}
         >
-          {loading ? "Processing..." : revisedText ? "Revised Text" : "Generate Revised Text"}
+          {loading ? "Processing..." : "Revised Document" }
         </Button>
       </div>
 
@@ -94,23 +121,16 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
       {showEdited && (
         <div className="fixed bottom-[10px] right-[0px] z-50 flex justify-end w-full pr-6">
           <div className="flex ml-auto space-x-2">
-            {/* Reload Button - Shown only when showEdited is true */}
-            <Button
-              onClick={handleGenerateEditedText}
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-md p-2"
-              size="icon"
-            >
-              <RefreshCcw className="w-5 h-5" />
-            </Button>
 
             {/* Edit/Save Button - Only shown if revisedText exists */}
             {revisedText && useMouStore.getState().riskyClauses.length > 0 && (
               <Button
+                data-testid="edit-toggle-button"
                 onClick={handleToggleEdit}
                 className="bg-blue-600 hover:bg-blue-700 text-white shadow-md p-2"
                 size="icon"
               >
-                {isEditing ? <Save className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
+                {isEditing ? <Save className="w-5 h-5" data-testid="save-icon" /> : <Pencil className="w-5 h-5" data-testid="pencil-icon" />}
               </Button>
             )}
           </div>
