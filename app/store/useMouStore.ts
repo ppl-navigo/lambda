@@ -13,7 +13,7 @@ export interface RiskyClause {
   originalClause: string;
   reason: string;
   revisedClause?: string;
-  suggestion?: string;
+  currentClause: string;
 }
 
 interface MouStore {
@@ -22,6 +22,7 @@ interface MouStore {
   setPagesContent: (pages: PageSection[]) => void;
   setRiskyClauses: (risks: RiskyClause[]) => void;
   updatePageContent: (sectionNumber: number, newContent: string) => void;
+  updateRiskyClause: (id: string, updates: Partial<RiskyClause>) => void;
 }
 
 export const useMouStore = create<MouStore>((set) => ({
@@ -40,8 +41,7 @@ export const useMouStore = create<MouStore>((set) => ({
         ...risks.map(risk => ({
           ...risk,
           id: risk.id || uuidv4(), // Generate ID jika belum ada
-          revisedClause: risk.revisedClause || "",
-          suggestion: risk.suggestion || ""
+          revisedClause: risk.revisedClause || ""
         }))
       ],
     })),
@@ -52,6 +52,13 @@ export const useMouStore = create<MouStore>((set) => ({
         page.sectionNumber === sectionNumber 
           ? { ...page, content: newContent } 
           : page
+      ),
+    })),
+
+  updateRiskyClause: (id, updates) =>
+    set((state) => ({
+      riskyClauses: state.riskyClauses.map(risk =>
+        risk.id === id ? { ...risk, ...updates } : risk
       ),
     })),
 }));
