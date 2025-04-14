@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import React from "react";
-import axios from "axios";
+import React, { useCallback, useState, useEffect } from "react";
 import { FaSpinner } from "react-icons/fa";
-import { useCallback } from "react";
 import { useMouStore, RiskyClause } from "@/app/store/useMouStore";
 import { v4 as uuidv4 } from 'uuid';
+import { SYSTEM_PROMPT_REVISION, SYSTEM_PROMPT_ANALYZE, SYSTEM_PROMPT_ORGANIZE, 
+        SYSTEM_PROMPT_UPDATE, SYSTEM_PROMPT_USER_EDIT } from "@/app/utils/prompt";
+import { apiRequest } from "@/app/utils/apiRequest";
+import { fetchFileAndExtractText } from "@/app/utils/fileUtils";
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
@@ -15,18 +16,36 @@ interface MarkdownViewerProps {
 export const RiskItem: React.FC<{ 
   risk: RiskyClause; 
   isSelected: boolean;
-  onSelect: (id: string) => void 
-}> = ({ risk, isSelected, onSelect }) => {
+  onSelect: (id: string, isSelected: boolean) => void;  // New handler for selecting clauses
+  onRevise: (risk: RiskyClause) => void;
+  onApply: (risk: RiskyClause) => void;
+  isLoading: boolean;  // Track the loading state for each risk
+}> = ({ risk, isSelected, onSelect, onRevise, onApply, isLoading }) => {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="mb-4 border-b border-gray-700 pb-2">
-      <div className="flex justify-between items-start cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <h3 className="text-base font-semibold">📌 {risk.title}</h3>
-        <button className="text-sm text-blue-400 focus:outline-none mt-1">
-          {expanded ? "Collapse" : "Expand"}
-        </button>
-      </div>
+    <div className="mb-4 border-b border-gray-700 pb-2" id={risk.id}>
+      <div className="flex items-center">
+      {/* Checkbox for selecting the clause on the left */}
+      <input
+        type="checkbox"
+        checked={isSelected}
+        onChange={(e) => onSelect(risk.id, e.target.checked)}  // Handle checkbox change
+        className="mr-2"
+      />
+      
+      {/* Title beside checkbox on the left */}
+      <h3 className="text-base font-semibold flex-1">📌 {risk.title}</h3>
+      
+      {/* Expand button on the far right */}
+      <button 
+        className="text-sm text-blue-400 focus:outline-none"
+        onClick={() => setExpanded(!expanded)}  // Toggle expansion on button click
+      >
+        {expanded ? "Collapse" : "Expand"}
+      </button>
+    </div>
+
       {expanded && (
         <div className="mt-2 text-sm">
           <p>
@@ -37,22 +56,44 @@ export const RiskItem: React.FC<{
           </p>
           
           <div className="mt-2 space-y-2">
-            <button
-              className={`mt-2 px-3 py-1 rounded ${
-                isSelected ? "bg-green-600" : "bg-blue-600"
-              } text-white`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(risk.id);
-              }}
-            >
-              {isSelected ? "Deselect" : "Select Clause"}
-            </button>
+            {!risk.revisedClause && isLoading && (
+              <p className="mt-1 text-yellow-400">⏳ Generating revision...</p>
+            )}
 
             {risk.revisedClause && (
-              <p className="mt-2 text-green-400">
-                <strong>📝 Revision Generated on Revised Document Section</strong>
+              <>
+              <p className="mt-1">
+                {(() => {
+                  console.log("Rendering revised clause:", risk.revisedClause);
+                  return null;
+                })()}
+                <strong>📝 Suggested Revision:</strong> {risk.revisedClause}
               </p>
+              </>
+            )}
+
+            {!risk.revisedClause && !isLoading && (
+              <button
+                className="mt-2 bg-blue-500 text-white px-2 py-1 rounded"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRevise(risk);  // Call onRevise to get the revision
+                }}
+              >
+                Get Revision
+              </button>
+            )}
+
+            {risk.revisedClause && (
+              <button
+                className="mt-2 bg-green-600 px-2 py-1 text-white rounded"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onApply(risk);  // Apply the suggestion
+                }}
+              >
+                Apply Suggestion
+              </button>
             )}
           </div>
         </div>
@@ -65,91 +106,43 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   const { pagesContent, setPagesContent, setRiskyClauses } = useMouStore();
   const [risks, setRisks] = useState<RiskyClause[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});  // Loading state for each risk
   const [error, setError] = useState("");
   const [processedPages, setProcessedPages] = useState<number[]>([]);
-  const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null);
   const [chatPrompt, setChatPrompt] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [selectedRisks, setSelectedRisks] = useState<Set<string>>(new Set());  // Track selected risks
 
   const downloadFileAndExtractText = useCallback(async (fileUrl: string) => {
-    try {
-      const fileResponse = await axios.get(fileUrl, { responseType: "blob" });
-      const fileBlob = fileResponse.data;
-      const fileName = fileUrl.split("/").pop() || "unknown-file";
-      const fileType = fileResponse.headers["content-type"];
-      const file = new File([fileBlob], fileName, { type: fileType });
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const extractResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/extract_text/`,
-        formData
-      );
-
-      const pagesText: string[] = extractResponse.data.pages_text;
-      return pagesText;
-    } catch (error) {
-      console.error("❌ Error extracting text from backend:", error);
+    setError("");
+    const pagesText = await fetchFileAndExtractText(fileUrl, process.env.NEXT_PUBLIC_API_URL ?? "", "Error extracting text from backend");
+  
+    if (pagesText.length === 0) {
       setError("❌ Error extracting text from backend.");
-      return [];
     }
+  
+    return pagesText;
   }, []);
-
+  
   const analyzeTextWithAI = useCallback(
     async (text: string, sectionNumber: number): Promise<RiskyClause[]> => {
       setLoading(true);
       setError("");
-      let accumulatedResponse = "";
-
       try {
-        const systemPrompt = `
-Analisis dokumen berikut untuk mengidentifikasi klausul yang berpotensi berisiko bagi pihak kedua. Risiko mencakup, namun tidak terbatas pada:
+        const response = await apiRequest(SYSTEM_PROMPT_ANALYZE, text, "Error analyzing text");
 
-- Ketidakseimbangan hak dan kewajiban antara pihak pertama dan pihak kedua
-- Klausul pembatalan yang merugikan
-- Klausul pembayaran yang berpotensi memberatkan
-- Klausul tanggung jawab yang bisa menyebabkan kerugian sepihak
-- Klausul force majeure yang tidak melindungi kepentingan pihak kedua
-- Klausul ambigu atau multi-tafsir yang bisa disalahgunakan
-- Klausul lain yang dapat menyebabkan dampak hukum negatif bagi pihak kedua
+        if (response.toLowerCase().includes("tidak ditemukan klausul")) return [];
 
-Format hasil yang diharapkan dalam **markdown**:
-
-\`\`\`
-Klausul {judul}: "{kalimat atau kata-kata berisiko}"
-Alasan: "{penjelasan mengapa klausul ini berisiko}"
-\`\`\`
-`;
-
-        const response = await fetch("/api/mou-analyzer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ promptText: text, systemPrompt }),
-        });
-
-        if (!response.body) throw new Error("No stream body received");
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          accumulatedResponse += decoder.decode(value, { stream: true });
-        }
-
-        if (accumulatedResponse.toLowerCase().includes("tidak ditemukan klausul")) return [];
-
-        const riskMatches = accumulatedResponse.matchAll(/(?:\*\*)?Klausul\s+(.*?):(?:\*\*)?\s*["']?(.*?)["']?\s*(?:\.\s*)?(?:\*\*)?Alasan:(?:\*\*)?\s*["']?(.*?)["']?(?:\n|$)/g);
+        const riskMatches = response.matchAll(/(?:\*\*)?Klausul\s+(.*?):(?:\*\*)?\s*["']?(.*?)["']?\s*(?:\.\s*)?(?:\*\*)?Alasan:(?:\*\*)?\s*["']?(.*?)["']?(?:\n|$)/g);
         const extractedRisks: RiskyClause[] = Array.from(riskMatches, (match: RegExpMatchArray) => ({
           id: uuidv4(), // Add unique ID
           sectionNumber,
           title: cleanText(`Klausul ${match[1]}`),
           originalClause: cleanText(match[2]),
           reason: cleanText(match[3]),
-          revisedClause: "" // Add empty initial revision
+          revisedClause: "",
+          currentClause: cleanText(match[2]),
         }));
-        
         return extractedRisks;
       } catch (error) {
         console.error(`❌ Error analyzing section ${sectionNumber}:`, error);
@@ -211,132 +204,130 @@ Alasan: "{penjelasan mengapa klausul ini berisiko}"
   }, [pdfUrl, processDocument]);
 
   const organizeTextWithLLM = async (text: string): Promise<string> => {
-    const systemPrompt = `
-Susun ulang teks dokumen berikut agar terlihat rapi dan profesional untuk ditampilkan kembali. Pertahankan struktur asli dokumen seperti judul, subjudul, poin-poin, dan numbering. Gunakan bahasa yang formal namun tidak terlalu kaku dan jangan mengubah isi asli. Gunakan format markdown, tetapi jangan ada format tabel.
-  `;
-  
-    const response = await fetch("/api/mou-analyzer", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        promptText: text,
-        systemPrompt,
-      }),
-    });
-  
-    if (!response.body) throw new Error("No response from LLM");
-  
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let result = "";
-  
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      result += decoder.decode(value);
-    }
-  
-    return result.trim();
+    const organizedText = await apiRequest(SYSTEM_PROMPT_ORGANIZE, text, "Error organizing text");
+    return organizedText.trim();
   };
+
+  const handleRevise = async (risk: RiskyClause) => {
+    setLoadingStates((prev) => ({ ...prev, [risk.id]: true }));  // Set loading to true for this risk
+    try {
+      const suggestion = await generateRevisionWithAI(risk.originalClause, risk.reason);
+      
+      useMouStore.getState().updateRiskyClause(risk.id, {
+        revisedClause: suggestion,
+      });
+
+      setRisks((prev) =>
+        prev.map((r) =>
+          r.id === risk.id ? { ...r, revisedClause: suggestion } : r
+        )
+      );
+    } catch (error) {
+      console.error("❌ Error generating revision:", error);
+    } finally {
+      setLoadingStates((prev) => ({ ...prev, [risk.id]: false }));  // Set loading to false for this risk
+    }
+  };
+  
+  const handleApplySuggestion = async (risk: RiskyClause) => {
+    try {
+      const currentPagesContent = useMouStore.getState().pagesContent;
+      const originalPageContent = currentPagesContent.find(
+        p => p.sectionNumber === risk.sectionNumber
+      )?.content || '';
+      
+      console.log("Original Page Content:", originalPageContent);
+      console.log("Risk Clause:", risk.currentClause);
+      console.log("Suggestion:", risk.revisedClause);
+
+      const systemPrompt = SYSTEM_PROMPT_UPDATE
+      .replace("{originalPageContent}", originalPageContent)
+      .replace("{originalClause}", risk.currentClause)
+      .replace("{suggestion}", risk.revisedClause || "");
+      
+      const revisedPageContent = await apiRequest(systemPrompt, originalPageContent, "Error applying revision");
+
+      useMouStore.getState().updatePageContent(risk.sectionNumber, revisedPageContent);
+      useMouStore.getState().updateRiskyClause(risk.id, {
+            currentClause: risk.revisedClause
+      });
+
+      setRisks((prev) =>
+        prev.map((r) =>
+          r.id === risk.id ? { ...r, currentClause: risk.revisedClause || "" } : r
+        )
+      );
+      // Fetch updated state to verify changes
+      const updatedRisk = useMouStore.getState().riskyClauses.find(r => r.id === risk.id);
+      console.log("Updated currentClause:", updatedRisk?.currentClause);
+
+    } catch (error) {
+      console.error("❌ Error applying suggestion:", error);
+      alert("Gagal menerapkan revisi klausul");
+    }
+  };  
 
   const generateRevisionWithAI = useCallback(async (
     riskyText: string,
-    reason: string,
-    systemPrompt: string // Sekima menerima custom prompt
+    reason: string
   ): Promise<string> => {
-    try {
-      const response = await fetch("/api/mou-analyzer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          promptText: "", // Tidak perlu prompt tambahan
-          systemPrompt    // Gunakan systemPrompt yang sudah dibuat
-        }),
-      });
-
-      if (!response.body) throw new Error("No stream body received");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-
-      let accumulatedResponse = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        accumulatedResponse += decoder.decode(value, { stream: true });
-      }
-      console.log("Final System Prompt:", systemPrompt);
-
-      return accumulatedResponse;
-    } catch (error) {
-      console.error("❌ Error generating revision:", error);
-      return "Error generating revision.";
-    }
+    const systemPrompt = SYSTEM_PROMPT_REVISION.replace("{riskyText}", riskyText).replace("{reason}", reason);
+    
+    const suggestion = await apiRequest(systemPrompt, riskyText, "Error generating revision");
+    return suggestion;
   }, []);
 
-  const handleSelectClause = (riskId: string) => {
-    setSelectedRiskId(current => current === riskId ? null : riskId);
+  const handleSelectClause = (riskId: string, isSelected: boolean) => {
+    setSelectedRisks((prev) => {
+      const newSelectedRisks = new Set(prev);
+      if (isSelected) {
+        newSelectedRisks.add(riskId);  // Add to set if selected
+      } else {
+        newSelectedRisks.delete(riskId);  // Remove from set if deselected
+      }
+      return newSelectedRisks;
+    });
   };
 
   const handleSendPrompt = async () => {
-    if (!selectedRiskId) return;
-  
-    const selectedRisk = risks.find(r => r.id === selectedRiskId);
-    if (!selectedRisk) return;
+    if (selectedRisks.size === 0) return; // If no clauses are selected
   
     setIsSending(true);
+  
     try {
-      // 1. Dapatkan konten halaman terkait
-      const currentPagesContent = useMouStore.getState().pagesContent;
-      const originalPageContent = currentPagesContent.find(
-        p => p.sectionNumber === selectedRisk.sectionNumber
-      )?.content || '';
+      // 1. Generate system prompts for all selected clauses
+      const selectedRiskClauses = risks.filter(risk => selectedRisks.has(risk.id));
+      
+      // Iterate through each selected risk
+      for (const selectedRisk of selectedRiskClauses) {
+        const systemPrompt = SYSTEM_PROMPT_USER_EDIT
+          .replace("{riskyText}", selectedRisk.currentClause)
+          .replace("{revisedClause}", selectedRisk.revisedClause || "")
+          .replace("{chatPrompt}", chatPrompt || "");
   
-      // 2. Generate system prompt spesifik
-      const systemPrompt = `Anda adalah ahli hukum. Revisi HARUS mengikuti kriteria ini:
-  1. HANYA ubah klausul spesifik ini: "${selectedRisk.originalClause}"
-  2. Alasan revisi: "${selectedRisk.reason}"
-  ${
-    chatPrompt 
-      ? `3. Instruksi tambahan user: "${chatPrompt}"\n`
-      : '3. Tidak ada instruksi tambahan - buat revisi berdasarkan analisis risiko\n'
-  }
-  4. Format hasil: Kembalikan SELURUH konten halaman asli dengan HANYA klausul tersebut yang diubah
-  5. JANGAN ubah struktur dokumen, formatting, atau bagian lain
-  
-  Konten halaman asli:
-  ${originalPageContent}
-  
-  Hasil revisi (hanya ubah klausul yang dimaksud):`;
-  
-      // 3. Minta revisi ke AI
-      const revisedPageContent = await generateRevisionWithAI(
-        selectedRisk.originalClause,
-        selectedRisk.reason,
-        systemPrompt // Gunakan prompt khusus ini
-      );
-  
-      // 4. Update store dengan halaman yang direvisi
-      useMouStore.getState().updatePageContent(
-        selectedRisk.sectionNumber,
-        revisedPageContent
-      );
-  
-      // 5. Update revisi klausul di state lokal
-      setRisks(prev => prev.map(risk => 
-        risk.id === selectedRiskId 
-          ? { ...risk, revisedClause: revisedPageContent } 
-          : risk
-      ));
-  
+        // 2. Request revision from LLM
+        console.log("System Prompt:", systemPrompt);
+        console.log("Current Clause:", selectedRisk.currentClause);
+        const revisedClause = await apiRequest(systemPrompt, selectedRisk.currentClause, "Error generating revision");
+        console.log("Revised Clause:", revisedClause);
+
+        // 3. Update the revisedClause in the local state (for immediate display)
+        setRisks((prev) =>
+          prev.map((risk) =>
+            risk.id === selectedRisk.id ? { ...risk, revisedClause } : risk
+          )
+        );
+        
+        useMouStore.getState().updateRiskyClause(selectedRisk.id, {
+          revisedClause: revisedClause,
+        });
+      }
     } catch (error) {
       console.error("Revision error:", error);
       alert("Gagal merevisi klausul");
     } finally {
       setIsSending(false);
-      setSelectedRiskId(null);
-      setChatPrompt("");
+      setChatPrompt("");  // Clear the chat input
     }
   };
 
@@ -364,14 +355,17 @@ Susun ulang teks dokumen berikut agar terlihat rapi dan profesional untuk ditamp
           }, {} as Record<number, RiskyClause[]>)
         ).map(([sectionNumber, group]) => (
           <div key={sectionNumber} className="mb-6">
-            <h2 className="text-base font-bold mb-2 text-blue-300">📄 Page {sectionNumber}</h2>
+            <h2 className="text-base font-bold mb-2 text-blue-300">Page {sectionNumber}</h2>
             {group.map((risk) => (
               <RiskItem 
-                key={risk.id}
-                risk={risk}
-                isSelected={risk.id === selectedRiskId}
-                onSelect={handleSelectClause}
-              />
+              key={risk.id}
+              risk={risk}
+              isSelected={selectedRisks.has(risk.id)}
+              onSelect={handleSelectClause}
+              onRevise={handleRevise}
+              onApply={handleApplySuggestion}
+              isLoading={loadingStates[risk.id] || false}  // Pass isLoading for each risk
+            />
             ))}
           </div>
         ))}
@@ -380,38 +374,31 @@ Susun ulang teks dokumen berikut agar terlihat rapi dan profesional untuk ditamp
       {/* Floating Chatbar */}
       <div className="absolute bottom-0 left-0 right-0 z-50 bg-[#2A2A2A] border-t border-gray-700 p-4">
         <div className="relative">
-          <div className={`flex gap-2 items-center ${!selectedRiskId ? 'opacity-50' : ''}`}>
+          <div className={`flex gap-2 items-center`}>
+            {/* Chat Input for revision instructions */}
             <input
               type="text"
               placeholder={
-                selectedRiskId 
+                selectedRisks.size > 0 
                   ? "Type your revision instructions..." 
-                  : "Select a clause to revise..."
+                  : "Select clauses to revise..."
               }
               className="flex-1 p-2 rounded-lg bg-gray-800 text-white"
               value={chatPrompt}
               onChange={(e) => setChatPrompt(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSendPrompt()}
-              disabled={!selectedRiskId}
+              disabled={selectedRisks.size === 0}  // Disable if no clauses are selected
             />
             
+            {/* Revise Button */}
             <button
-              className={`px-4 py-2 rounded-lg ${
-                isSending || !selectedRiskId ? 'bg-gray-600' : 'bg-blue-600'
-              } text-white`}
+              className={`px-4 py-2 rounded-lg ${isSending || selectedRisks.size === 0 ? 'bg-gray-600' : 'bg-blue-600'} text-white`}
               onClick={handleSendPrompt}
-              disabled={isSending || !selectedRiskId}
+              disabled={isSending || selectedRisks.size === 0}
             >
               {isSending ? 'Generating...' : 'Revise'}
             </button>
           </div>
-  
-          {!selectedRiskId && (
-            <div 
-              className="absolute inset-0 bg-gray-800 bg-opacity-50 rounded-lg cursor-not-allowed"
-              onClick={(e) => e.preventDefault()}
-            />
-          )}
         </div>
       </div>
     </div>
