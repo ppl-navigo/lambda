@@ -23,6 +23,13 @@ jest.mock('../../app/utils/markdownRenderer', () => ({
   ),
 }));
 
+jest.mock('react-toastify', () => ({
+  toast: {
+    success: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
 // Mock ReadableStream for Jest
 global.ReadableStream = require('web-streams-polyfill').ReadableStream;
 global.fetch = jest.fn();
@@ -204,4 +211,21 @@ describe('Streamer component', () => {
   //   const saveIcon = screen.getByTestId('save-icon');
   //   expect(saveIcon).toBeInTheDocument();
   // });
+
+  test('renders original PDF when showEdited is false', async () => {
+    render(<Streamer pdfUrl="http://example.com/test.pdf" />);
+
+    expect(screen.getByTitle("Original PDF")).toBeInTheDocument();
+  });
+
+  test('renders no content message when no pages are loaded', async () => {
+    render(<Streamer pdfUrl="http://example.com/test.pdf" />);
+    
+    fireEvent.click(screen.getByText(/Revised Document/i));
+    
+    await waitFor(() => {
+      expect(screen.getByText(/No content loaded yet/i)).toBeInTheDocument();
+    });
+  });
+
 });
