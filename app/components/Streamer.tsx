@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
-import { Pencil, Save, RefreshCcw } from "lucide-react"; // Add RefreshCcw icon
+import { Pencil, Save } from "lucide-react"; // Add RefreshCcw icon
 import { useMouStore } from "@/app/store/useMouStore";
 import MarkdownRenderer from "../utils/markdownRenderer";
 import { TextStreamer } from "../utils/textStreamer";
@@ -21,6 +21,7 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleGenerateEditedText = async () => {
+    console.log("Generating handling generated edited text...");
     // Hanya generate jika belum ada revised text
     if (!revisedText) {
       setLoading(true);
@@ -29,7 +30,7 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
           .map((page) => `---PAGE_START_${page.sectionNumber}---\n${page.content}`)
           .join("\n");
         
-        TextStreamer.simulateStream(fullText, 1000, 100, (chunk) => {
+        TextStreamer.simulateStream(fullText, 100, 100, (chunk) => {
           setRevisedText((prev) => prev + chunk);
         });
       } finally {
@@ -37,23 +38,6 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
       }
     }
     setShowEdited(true);
-  };
-
-  const handleRefreshRevisedText = async () => {
-    setLoading(true);
-    try {
-      const fullText = pagesContent
-        .map((page) => `---PAGE_START_${page.sectionNumber}---\n${page.content}`)
-        .join("\n");
-      
-      // Force refresh dengan reset text
-      setRevisedText("");
-      TextStreamer.simulateStream(fullText, 1000, 100, (chunk) => {
-        setRevisedText((prev) => prev + chunk);
-      });
-    } finally {
-      setLoading(false);
-    }
   };
 
   useEffect(() => {
@@ -65,6 +49,7 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
 
   useEffect(() => {
     if (showEdited && !loading && !isEditing) {
+      console.log("Updating revised text...");
       const newText = pagesContent
         .map(p => `---PAGE_START_${p.sectionNumber}---\n${p.content}`)
         .join('\n');
@@ -82,7 +67,7 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
           if (idx % 2 === 0) {
             const sectionNumber = parseInt(curr);
             const content = arr[idx + 1]?.trim() ?? "";
-            acc.push({ sectionNumber, content });
+            acc.push({ sectionNumber, content: content });
           }
           return acc;
         }, []);
