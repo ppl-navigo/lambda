@@ -2,6 +2,19 @@ import React from "react";
 import { render, screen, waitFor, fireEvent, act, cleanup} from "@testing-library/react";
 import axios from "axios";
 import MarkdownViewer from "@/app/components/MarkdownViewer";
+import { apiRequest } from "@/app/utils/apiRequest";
+import { toast } from 'react-toastify';
+
+jest.mock('react-toastify', () => {
+  const actualModule = jest.requireActual('react-toastify');
+  return {
+    ...actualModule,
+    toast: {
+      success: jest.fn(),
+      error: jest.fn(),
+    },
+  };
+});
 
 jest.mock("axios");
 jest.mock("react-markdown", () => ({ children }: { children: React.ReactNode }) => <div>{children}</div>);
@@ -161,6 +174,82 @@ describe("MarkdownViewer Component Tests (Fully Mocked)", () => {
     });
     await waitFor(() => {
       expect(screen.getByText(/No risks found./i)).toBeInTheDocument();
+    });
+  });
+
+  test("handles revision generation successfully", async () => {
+    // Mock inside the test
+    jest.mock("@/app/utils/apiRequest", () => ({
+      apiRequest: jest.fn().mockResolvedValue("Revised text based on reason."),
+    }));
+
+    const { apiRequest } = require("@/app/utils/apiRequest");
+
+    // Render the component
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/test.pdf" />);
+    });
+
+    // Expand the clause details
+    const expandButton = await screen.findByText(/Expand/i);
+    fireEvent.click(expandButton);
+
+    // Ensure text content is rendered
+    await waitFor(() => {
+      expect(screen.getByText("Risky Text")).toBeInTheDocument();
+    });
+    
+    // Trigger the revise functionality
+    const getRevisionButton = screen.getByText(/Get Revision/i);
+    fireEvent.click(getRevisionButton);
+
+    // Wait for the success message
+    await waitFor(() => {
+      expect(screen.getByText(/Revisi/i)).toBeInTheDocument();
+    });
+  });
+
+  test("applies suggestion successfully", async () => {
+    const { apiRequest } = require("@/app/utils/apiRequest");
+
+    // Mock apiRequest responses
+    apiRequest.mockImplementation((prompt: string | string[]) => {
+      if (prompt.includes("Revised Page Content")) {
+        return Promise.resolve("Revised Content");
+      }
+      return Promise.resolve("Suggested Revision");
+    });
+
+    // Render the component
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="https://example.com/test.pdf" />);
+    });
+
+    // Expand the clause details
+    const expandButton = await screen.findByText(/Expand/i);
+    fireEvent.click(expandButton);
+
+    // Ensure text content is rendered
+    await waitFor(() => {
+      expect(screen.getByText("Risky Text")).toBeInTheDocument();
+    });
+
+    // Trigger the get revision functionality
+    const getRevisionButton = screen.getByText(/Get Revision/i);
+    fireEvent.click(getRevisionButton);
+
+    // Wait for the revised text to be displayed
+    await waitFor(() => {
+      expect(screen.getByText(/Suggested Revision/i)).toBeInTheDocument();
+    });
+
+    // Now trigger the apply suggestion functionality
+    const applyButton = screen.getByText(/Apply Suggestion/i);
+    fireEvent.click(applyButton);
+
+    // Wait for the success message
+    await waitFor(() => {
+      expect(screen.getByText(/Revisi/i)).toBeInTheDocument();
     });
   });
 });
