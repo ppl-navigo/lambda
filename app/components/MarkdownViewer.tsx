@@ -8,6 +8,8 @@ import { SYSTEM_PROMPT_REVISION, SYSTEM_PROMPT_ANALYZE, SYSTEM_PROMPT_ORGANIZE,
         SYSTEM_PROMPT_UPDATE, SYSTEM_PROMPT_USER_EDIT } from "@/app/utils/prompt";
 import { apiRequest } from "@/app/utils/apiRequest";
 import { fetchFileAndExtractText } from "@/app/utils/fileUtils";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
@@ -222,8 +224,11 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
           r.id === risk.id ? { ...r, revisedClause: suggestion } : r
         )
       );
+
+      toast.success("Revisi berhasil dihasilkan!");
     } catch (error) {
       console.error("❌ Error generating revision:", error);
+      toast.error("Gagal untuk menghasilkan revisi!");
     } finally {
       setLoadingStates((prev) => ({ ...prev, [risk.id]: false }));  // Set loading to false for this risk
     }
@@ -236,16 +241,22 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
         p => p.sectionNumber === risk.sectionNumber
       )?.content || '';
       
-      console.log("Original Page Content:", originalPageContent);
+      // Remove highlight tags from the original content
+      const cleanedOriginalContent = originalPageContent.replace(
+        /<highlight>(.*?)<\/highlight>/g,
+        '$1'
+      );
+      
+      console.log("Original Page Content:", cleanedOriginalContent);
       console.log("Risk Clause:", risk.currentClause);
       console.log("Suggestion:", risk.revisedClause);
 
       const systemPrompt = SYSTEM_PROMPT_UPDATE
-      .replace("{originalPageContent}", originalPageContent)
+      .replace("{originalPageContent}", cleanedOriginalContent)
       .replace("{originalClause}", risk.currentClause)
       .replace("{suggestion}", risk.revisedClause || "");
       
-      const revisedPageContent = await apiRequest(systemPrompt, originalPageContent, "Error applying revision");
+      const revisedPageContent = await apiRequest(systemPrompt, "", "Error applying revision");
 
       useMouStore.getState().updatePageContent(risk.sectionNumber, revisedPageContent);
       useMouStore.getState().updateRiskyClause(risk.id, {
@@ -257,13 +268,11 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
           r.id === risk.id ? { ...r, currentClause: risk.revisedClause || "" } : r
         )
       );
-      // Fetch updated state to verify changes
-      const updatedRisk = useMouStore.getState().riskyClauses.find(r => r.id === risk.id);
-      console.log("Updated currentClause:", updatedRisk?.currentClause);
+      toast.success("Revisi berhasil diterapkan!");
 
     } catch (error) {
       console.error("❌ Error applying suggestion:", error);
-      alert("Gagal menerapkan revisi klausul");
+      toast.error("Gagal menerapkan revisi klausul!");
     }
   };  
 
@@ -322,9 +331,10 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
           revisedClause: revisedClause,
         });
       }
+      toast.success("Revisi berhasil dikirimkan!");
     } catch (error) {
       console.error("Revision error:", error);
-      alert("Gagal merevisi klausul");
+      toast.error("Gagal untuk merevisi klausul!");
     } finally {
       setIsSending(false);
       setChatPrompt("");  // Clear the chat input
@@ -333,6 +343,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
   return (
     <div className="h-screen flex flex-col relative">
+      <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} />
       {/* Main Content Area with scroll */}
       <div className="bg-[#1A1A1A] text-white p-4 rounded-md flex-1 overflow-y-auto">
         {loading && processedPages.length === 0 && (
