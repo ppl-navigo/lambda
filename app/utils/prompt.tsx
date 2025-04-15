@@ -81,9 +81,9 @@ export const SYSTEM_PROMPT_UPDATE = `Anda adalah ahli hukum yang bertugas merevi
 
 Berikan versi revisi teks dengan mengganti hanya klausul yang disebutkan TANPA MENGUBAH ISI KONTEKS ATAU DOKUMEN TEKS LAINNYA. 
 
-Jika tidak ditemukan Klausul tersebut dalam teks, tampilkan pesan: "Klausul yang diminta tidak ditemukan dalam teks".
+Gunakan tag khusus <highlight> ... </highlight> di sekitar teks yang direvisi. INGAT HARUS ADA TAG <highlight> ... </highlight> DAN TEKS YANG DIREVISI BERADA DI TENGAHNYA.
 
-**Hasil Revisi (Ingat: hanya ubah klausul yang dimaksud):
+Jika tidak ditemukan Klausul tersebut dalam teks, tampilkan pesan: "Klausul yang diminta tidak ditemukan dalam teks".
 `;
 
 // LLM updating text revised clause with chat prompt
