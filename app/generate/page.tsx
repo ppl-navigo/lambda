@@ -12,9 +12,10 @@ import { ChevronDown, MoreHorizontal } from "lucide-react"
 import { MathpixMarkdown, MathpixLoader } from "mathpix-markdown-it"
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
-import { Document as DocxDocument, Packer, Paragraph, TextRun } from 'docx';
-import { marked } from 'marked';
 import { saveAs } from 'file-saver';
+import { unified } from "unified";
+import markdown from "remark-parse";
+import docx from "remark-docx";
 
 interface Pihak {
   nama: string;
@@ -195,37 +196,12 @@ export default function LegalDocumentsPage() {
   const handleDownload = async () => {
     if (generatedDocument) {
       try {
-        // Parse markdown to HTML tokens
-        const tokens = marked.lexer(generatedDocument);
-        
-        // Convert tokens to docx paragraphs
-        const docxParagraphs = tokens.map(token => {
-          if (token.type === 'heading') {
-            return new Paragraph({
-              children: [new TextRun({ text: token.text, bold: true, size: 32 })],
-              spacing: { after: 200 }
-            });
-          } else if (token.type === 'paragraph') {
-            return new Paragraph({
-              children: [new TextRun({ text: token.text })],
-              spacing: { after: 200 }
-            });
-          }
-          return new Paragraph({ children: [new TextRun({ text: '' })] });
-        });
-
-        // Create docx document
-        const doc = new DocxDocument({
-          sections: [{
-            properties: {},
-            children: docxParagraphs
-          }]
-        });
-
-        // Generate and save the docx file
-        const buffer = await Packer.toBlob(doc);
+        const processor = unified().use(markdown).use(docx, { output: "blob" });
+        const doc = await processor.process(generatedDocument);
+        const blob = await doc.result;
         const fileName = lastFormData?.judul || 'document';
-        saveAs(buffer, `${fileName}-${new Date().toISOString()}.docx`);
+        console.log(`MD : \n${generatedDocument}`)
+        saveAs(blob, `${fileName}-${new Date().toISOString()}.docx`);
       } catch (error) {
         console.error('Error generating DOCX:', error);
         setError('Failed to generate document download');

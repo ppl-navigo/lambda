@@ -5,9 +5,10 @@ import Sidebar from "../../components/generate/Sidebar";
 import DocumentViewer from "../../components/generate/DocumentViewer";
 import { Document } from "../../components/generate/DocumentObject";
 import { supabase } from "@/utils/supabase";
-import { Document as DocxDocument, Packer, Paragraph, TextRun } from 'docx';
-import { marked } from 'marked';
 import { saveAs } from 'file-saver';
+import { unified } from "unified";
+import markdown from "remark-parse";
+import docx from "remark-docx";
 
 interface SupabaseDocument {
   title: string;
@@ -53,38 +54,12 @@ const DocumentHistory = () => {
   const handleDownload = async () => {
     if (viewedDocumentString) {
       try {
-        // Parse markdown to HTML tokens
-        const tokens = marked.lexer(viewedDocumentString);
-        
-        // Convert tokens to docx paragraphs
-        const docxParagraphs = tokens.map(token => {
-          if (token.type === 'heading') {
-            return new Paragraph({
-              children: [new TextRun({ text: token.text, bold: true, size: 32 })],
-              spacing: { after: 200 }
-            });
-          } else if (token.type === 'paragraph') {
-            return new Paragraph({
-              children: [new TextRun({ text: token.text })],
-              spacing: { after: 200 }
-            });
-          }
-          return new Paragraph({ children: [new TextRun({ text: '' })] });
-        });
-
-        // Create docx document
-        const doc = new DocxDocument({
-          sections: [{
-            properties: {},
-            children: docxParagraphs
-          }]
-        });
-
-        // Generate and save the docx file
-        const buffer = await Packer.toBlob(doc);
+        const processor = unified().use(markdown).use(docx, { output: "blob" });
+        const doc = await processor.process(viewedDocumentString);
+        const blob = await doc.result;
         const selectedDoc = documents.find(doc => doc.content === viewedDocumentString);
         const fileName = selectedDoc ? selectedDoc.title : 'document';
-        saveAs(buffer, `${fileName}-${new Date().toISOString()}.docx`);
+        saveAs(blob, `${fileName}-${new Date().toISOString()}.docx`);
       } catch (error) {
         console.error('Error generating DOCX:', error);
       }
