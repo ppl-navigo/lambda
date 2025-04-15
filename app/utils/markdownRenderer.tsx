@@ -8,7 +8,6 @@ const renderCustomMarkdown = (text: string) => {
       return <br key={index} />;
     }
     
-    // Handle PAGE_START marker
     const pageStartMatch = line.match(/^---PAGE_START_(\d+)---$/);
     if (pageStartMatch) {
       const pageNumber = pageStartMatch[1];
@@ -22,9 +21,41 @@ const renderCustomMarkdown = (text: string) => {
       );
     }
     
-    let processedLine = line.replace(/^#+\s*/, "");
+    // Remove quotes and trim line
+    let remaining = line.replace(/"/g, "").trim();
+    remaining = remaining.replace(/^#+\s*/, "");
 
     const processLine = (input: string): JSX.Element[] => {
+      const parts: JSX.Element[] = [];
+      const highlightRegex = /<highlight>(.*?)<\/highlight>/g;
+
+      let lastIndex = 0;
+      let match;
+
+      while ((match = highlightRegex.exec(input)) !== null) {
+        const before = input.slice(lastIndex, match.index);
+        if (before) {
+          parts.push(...processBoldItalic(before, index));
+        }
+
+        const highlightedText = match[1];
+        parts.push(
+          <span key={`highlight-${index}-${parts.length}`} className="text-red-500 font-bold">
+            {highlightedText}
+          </span>
+        );
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      if (lastIndex < input.length) {
+        parts.push(...processBoldItalic(input.slice(lastIndex), index));
+      }
+
+      return parts;
+    };
+
+    const processBoldItalic = (input: string, index: number): JSX.Element[] => {
       const parts: JSX.Element[] = [];
       let remaining = input;
 
@@ -64,7 +95,7 @@ const renderCustomMarkdown = (text: string) => {
       return parts;
     };
 
-    const processedParts = processLine(processedLine);
+    const processedParts = processLine(remaining);
 
     return (
       <p key={index} className="mb-2 whitespace-pre-wrap">
@@ -75,5 +106,6 @@ const renderCustomMarkdown = (text: string) => {
 };
 
 export default function MarkdownRenderer({ text }: { text: string }) {
-  return <div className="prose prose-invert max-w-none whitespace-pre-wrap">{renderCustomMarkdown(text)}</div>;
+  const trimmedText = text.trim();
+  return <div className="prose prose-invert max-w-none whitespace-pre-wrap">{renderCustomMarkdown(trimmedText)}</div>;
 }
