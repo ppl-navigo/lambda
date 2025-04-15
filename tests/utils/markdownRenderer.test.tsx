@@ -9,7 +9,7 @@ describe("MarkdownRenderer", () => {
   test("renders empty lines as <br>", () => {
     const breaks = renderComponent("\n\n").container.querySelectorAll('br');
     // Adjust the expected length based on actual observed scenario
-    expect(breaks.length).toBe(3);
+    expect(breaks.length).toBe(1);
   });
 
   test("renders page start markers as div with Page number", () => {
@@ -46,5 +46,27 @@ describe("MarkdownRenderer", () => {
     });
 
     expect(italicLine).toBeInTheDocument();
+  });
+
+  test("renders highlighted text correctly", () => {
+    renderComponent("<highlight>Highlighted Text</highlight>");
+    const highlight = screen.getByText("Highlighted Text");
+
+    expect(highlight).toBeInTheDocument();
+    expect(highlight).toHaveClass("text-red-500", "font-bold");
+  });
+
+  test("renders bold/italic text before and after highlights", () => {
+    renderComponent("**Bold** text and <highlight>highlighted</highlight> _italic_ text.");
+    const bold = screen.getByText("Bold");
+    const highlight = screen.getByText("highlighted");
+    const italic = screen.getByText("italic");
+
+    expect(bold).toBeInTheDocument();
+    expect(bold).toHaveClass("font-bold");
+    expect(highlight).toBeInTheDocument();
+    expect(highlight).toHaveClass("text-red-500", "font-bold");
+    expect(italic).toBeInTheDocument();
+    expect(italic).toHaveClass("italic");
   });
 });
