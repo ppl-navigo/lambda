@@ -59,8 +59,10 @@
     "remark-breaks": "^4.0.0",
     "remark-docx": "^0.1.6",
     "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
+    "unified": "^11.0.5",
     "uuid": "^11.1.0",
     "whatwg-fetch": "^3.6.20",
     "zustand": "^5.0.3"
