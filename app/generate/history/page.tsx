@@ -54,9 +54,13 @@ const DocumentHistory = () => {
   const handleDownload = async () => {
     if (viewedDocumentString) {
       try {
-        const processor = unified().use(markdown).use(docx, { output: "blob" });
+        // Create a processor with the correct output type
+        const processor = unified().use(markdown).use(docx);
         const doc = await processor.process(viewedDocumentString);
-        const blob = await doc.result;
+        // Handle the result by creating a Blob from it
+        const result = await doc.result;
+        const blob = new Blob([result instanceof Uint8Array ? result : JSON.stringify(result)], 
+          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
         const selectedDoc = documents.find(doc => doc.content === viewedDocumentString);
         const fileName = selectedDoc ? selectedDoc.title : 'document';
         saveAs(blob, `${fileName}-${new Date().toISOString()}.docx`);

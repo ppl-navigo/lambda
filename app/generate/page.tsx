@@ -196,11 +196,14 @@ export default function LegalDocumentsPage() {
   const handleDownload = async () => {
     if (generatedDocument) {
       try {
-        const processor = unified().use(markdown).use(docx, { output: "blob" });
+        const processor = unified().use(markdown).use(docx);
         const doc = await processor.process(generatedDocument);
-        const blob = await doc.result;
+        const result = await doc.result;
+        // Create a Blob from the result regardless of its type
+        const blob = new Blob([result instanceof Uint8Array ? result : JSON.stringify(result)], 
+          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
         const fileName = lastFormData?.judul || 'document';
-        console.log(`MD : \n${generatedDocument}`)
+        console.log(`MD : \n${generatedDocument}`);
         saveAs(blob, `${fileName}-${new Date().toISOString()}.docx`);
       } catch (error) {
         console.error('Error generating DOCX:', error);
