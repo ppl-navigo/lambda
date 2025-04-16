@@ -9,6 +9,24 @@ import LegalDocumentsPage from "../../app/generate/page";
 import "@testing-library/jest-dom";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
+// Mock unified and related packages
+jest.mock("unified", () => ({
+  unified: jest.fn().mockReturnValue({
+    use: jest.fn().mockReturnThis(),
+    process: jest.fn().mockResolvedValue({ value: "mocked content" }),
+  }),
+}));
+
+jest.mock("remark-parse", () => jest.fn());
+jest.mock("remark-docx", () => jest.fn());
+jest.mock("../../utils/supabase", () => ({
+  supabase: {
+    from: jest.fn().mockReturnThis(),
+    insert: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    then: jest.fn().mockResolvedValue({ data: [], error: null }),
+  },
+}));
 
 beforeEach(() => {
   global.fetch = jest.fn(() =>
