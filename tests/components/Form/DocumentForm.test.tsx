@@ -271,4 +271,124 @@ describe("DocumentForm Component", () => {
     // Clean up mock after test
     alertMock.mockRestore();
   });
+  it("handles regenerateDocument event", () => {
+    const mockOnGenerate = jest.fn();
+    render(<DocumentForm onGenerate={mockOnGenerate} />);
+
+    // Fill all required fields
+    const titleInput = screen.getByPlaceholderText("MoU ini tentang...");
+    const objectiveInput = screen.getByPlaceholderText(
+      "Kenapa Anda membuat MoU ini?"
+    );
+    const firstPartyNameInput = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    )[0];
+
+    fireEvent.change(titleInput, { target: { value: "Test Title" } });
+    fireEvent.change(objectiveInput, { target: { value: "Test Objective" } });
+    fireEvent.change(firstPartyNameInput, { target: { value: "Test Party" } });
+
+    // Dispatch custom event
+    const event = new Event("regenerateDocument");
+    document.dispatchEvent(event);
+
+    expect(mockOnGenerate).toHaveBeenCalled();
+  });
+
+  it("validates at least one party has a name", () => {
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+    const mockOnGenerate = jest.fn();
+    render(<DocumentForm onGenerate={mockOnGenerate} />);
+  
+    // Fill required fields EXCEPT party names
+    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
+      target: { value: "Valid Judul" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Kenapa Anda membuat MoU ini?"), {
+      target: { value: "Valid Tujuan" },
+    });
+  
+    // Clear any default party names
+    const partyInputs = screen.getAllByPlaceholderText("Nama atau Organisasi");
+    partyInputs.forEach(input => {
+      fireEvent.change(input, { target: { value: "" } });
+    });
+  
+    // Trigger submission
+    fireEvent.click(screen.getByTestId("generate-button"));
+  
+    expect(alertMock).toHaveBeenCalledWith("Setidaknya satu pihak harus memiliki nama");
+    expect(mockOnGenerate).not.toHaveBeenCalled();
+  });
+
+  it("resets form correctly", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Fill some data
+    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
+      target: { value: "Test" },
+    });
+    fireEvent.click(screen.getByText("Reset"));
+
+    // Verify reset
+    expect(screen.getByPlaceholderText("MoU ini tentang...")).toHaveValue("");
+    expect(
+      screen.getAllByPlaceholderText("Nama atau Organisasi")[0]
+    ).toHaveValue("");
+  });
+
+  it("handles rights and obligations operations", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Add right
+    fireEvent.click(screen.getAllByText("Tambah Hak")[0]);
+    expect(screen.getAllByPlaceholderText("Hak Pihak").length).toBe(3);
+
+    // Remove right
+    fireEvent.click(screen.getAllByText("Hapus Hak")[0]);
+    expect(screen.getAllByPlaceholderText("Hak Pihak").length).toBe(2);
+
+    // Add obligation
+    fireEvent.click(screen.getAllByText("Tambah Kewajiban")[0]);
+    expect(screen.getAllByPlaceholderText("Kewajiban Pihak").length).toBe(3);
+
+    // Remove obligation
+    fireEvent.click(screen.getAllByText("Hapus Kewajiban")[0]);
+    expect(screen.getAllByPlaceholderText("Kewajiban Pihak").length).toBe(2);
+  });
+
+  it("handles date validations correctly", () => {
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Get date buttons using accessible names
+    const startDateButton = screen.getByRole("button", {
+      name: /Tanggal Mulai/i,
+    });
+    const endDateButton = screen.getByRole("button", {
+      name: /Tanggal Selesai/i,
+    });
+
+    // Set valid dates
+    fireEvent.click(startDateButton);
+    fireEvent.click(screen.getByText("15")); // Select start date
+    fireEvent.click(endDateButton);
+    fireEvent.click(screen.getByText("20")); // Select end date
+    expect(alertMock).not.toHaveBeenCalled();
+
+    // Test valid start date change
+    fireEvent.click(startDateButton);
+    fireEvent.click(screen.getByText("10")); // Change to valid earlier date
+    expect(alertMock).not.toHaveBeenCalled();
+  });
+
+  it("initializes new parties with empty rights/obligations", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    fireEvent.click(screen.getByText("Tambahkan Pihak"));
+
+    // Check new party has empty rights/obligations
+    expect(screen.getAllByText("Tambah Hak").length).toBe(3);
+    expect(screen.getAllByText("Tambah Kewajiban").length).toBe(3);
+  });
 });
