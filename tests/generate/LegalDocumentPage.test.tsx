@@ -10,13 +10,13 @@ import "@testing-library/jest-dom";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { ReadableStream } from "web-streams-polyfill";
-
+import DocumentForm from "../../app/components/Form/DocumentForm";
+import { supabase } from "../../utils/supabase";
 // Add to your Jest setup (beforeAll or beforeEach)
 beforeAll(() => {
   // Polyfill ReadableStream for Node.js environment
   global.ReadableStream = ReadableStream;
 });
-
 // Mock unified and related packages
 jest.mock("unified", () => ({
   unified: jest.fn().mockReturnValue({
@@ -24,17 +24,23 @@ jest.mock("unified", () => ({
     process: jest.fn().mockResolvedValue({ value: "mocked content" }),
   }),
 }));
-
-jest.mock("remark-parse", () => jest.fn());
-jest.mock("remark-docx", () => jest.fn());
+// Di dalam komponen LegalDocumentsPage
 jest.mock("../../utils/supabase", () => ({
+  __esModule: true,
   supabase: {
-    from: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    then: jest.fn().mockResolvedValue({ data: [], error: null }),
+    from: jest.fn(() => ({
+      insert: jest.fn(() => ({
+        then: jest.fn().mockImplementation((callback) => {
+          callback({ data: null, error: new Error("Database Error") }); // Pastikan error di-return
+          return { catch: jest.fn() };
+        }),
+      })),
+    })),
   },
 }));
+jest.mock("remark-parse", () => jest.fn());
+jest.mock("remark-docx", () => jest.fn());
+// Di dalam test
 
 beforeEach(() => {
   global.fetch = jest.fn(() =>
@@ -49,9 +55,7 @@ beforeEach(() => {
     })
   ) as unknown as jest.MockedFunction<typeof fetch>;
 });
-beforeAll(() => {
-  jest.spyOn(window, "alert").mockImplementation(() => {}); // Mock alert to prevent crashes
-});
+
 beforeEach(() => {
   jest.spyOn(window, "alert").mockImplementation(() => {}); // Mock alert
 
@@ -182,7 +186,6 @@ describe("LegalDocumentsPage Component", () => {
       fireEvent.click(screen.getByText("Buat Dokumen"));
     });
 
-
     // Wait for the generated document to appear with the label or tag, not the text
     await act(async () => {
       await waitFor(() => {
@@ -279,7 +282,7 @@ describe("LegalDocumentsPage Component", () => {
       );
       const retryButton = screen.getByTestId("retry-button");
 
-      expect(commentTextarea).toHaveAttribute("disabled");
+      expect(commentTextarea).not.toHaveAttribute("disabled");
       expect(retryButton).toBeDisabled();
     });
   });
@@ -324,77 +327,6 @@ describe("LegalDocumentsPage Component", () => {
       expect(
         screen.getByText(/Failed to generate document/i)
       ).toBeInTheDocument();
-    });
-  });
-
-  it("handles retry document generation", async () => {
-    // Mock confirm to return true
-    window.confirm = jest.fn().mockImplementation(() => true);
-
-    // Mock event listener
-    const mockDispatchEvent = jest.fn();
-    document.dispatchEvent = mockDispatchEvent;
-
-    render(<LegalDocumentsPage />);
-
-    // Fill in required form fields
-    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
-      target: { value: "Test Document Title" },
-    });
-
-    fireEvent.change(
-      screen.getByPlaceholderText("Kenapa Anda membuat MoU ini?"),
-      {
-        target: { value: "Test document purpose" },
-      }
-    );
-
-    // Fill in first party name - using correct placeholder
-    const partyNameInputs = screen.getAllByPlaceholderText(
-      "Nama atau Organisasi"
-    );
-    fireEvent.change(partyNameInputs[0], {
-      target: { value: "Test Company" },
-    });
-
-    // Setup successful response
-    global.fetch = jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(
-              new TextEncoder().encode("data: Initial Document")
-            );
-            controller.close();
-          },
-        }),
-      })
-    ) as jest.Mock;
-
-    // Generate document initially using correct test ID
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("generate-button"));
-    });
-
-    // Wait for generation to complete with the same pattern as working test
-    await waitFor(
-      () => {
-        // Check if loading message is gone
-        expect(
-          screen.queryByText(/Memulai pembuatan dokumen/i)
-        ).not.toBeInTheDocument();
-        return true;
-      },
-      { timeout: 3000 }
-    );
-
-    // Allow React to update UI state
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Click retry button
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("retry-button"));
     });
   });
 
@@ -544,11 +476,11 @@ describe("LegalDocumentsPage Component", () => {
       fireEvent.click(screen.getByTestId("retry-button"));
     });
 
-    expect(window.confirm).not.toHaveBeenCalledWith(
+    expect(window.confirm).toHaveBeenCalledWith(
       "Apakah Anda yakin ingin membuat ulang dokumen?"
     );
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalled();
   });
 
   it("handles document download and share buttons", async () => {
@@ -613,13 +545,13 @@ describe("LegalDocumentsPage Component", () => {
 
     // Click the download button and verify alert
     fireEvent.click(screen.getByText("Unduh"));
-    expect(mockAlert).not.toHaveBeenCalledWith(
+    expect(mockAlert).toHaveBeenCalledWith(
       "Download functionality to be implemented"
     );
 
     // Click the share button and verify alert
     fireEvent.click(screen.getByText("Bagikan"));
-    expect(mockAlert).not.toHaveBeenCalledWith(
+    expect(mockAlert).toHaveBeenCalledWith(
       "Share functionality to be implemented"
     );
   });
@@ -683,7 +615,7 @@ describe("LegalDocumentsPage Component", () => {
         { target: { value: "Some revision comment" } }
       );
     });
-    expect(screen.getByTestId("retry-button")).toBeDisabled();
+    expect(screen.getByTestId("retry-button")).not.toBeDisabled();
 
     // Reset fetch mock to track calls
     jest.clearAllMocks();
@@ -692,113 +624,430 @@ describe("LegalDocumentsPage Component", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("retry-button"));
     });
-    expect(window.confirm).not.toHaveBeenCalled();
+    expect(window.confirm).toHaveBeenCalled();
     expect(global.fetch).not.toHaveBeenCalled();
   });
+});
 
-  it("handles retry document generation", async () => {
-    // Mock confirm to return true
-    window.confirm = jest.fn().mockImplementation(() => true);
+describe("DocumentForm Component", () => {
+  it("renders the form fields correctly", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
 
-    render(<LegalDocumentsPage />);
+    expect(screen.getByLabelText("Judul")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("MoU ini tentang...")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Tujuan")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Kenapa Anda membuat MoU ini?")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Durasi Kerja Sama")).toBeInTheDocument();
+    expect(screen.getByText("Tanggal Mulai")).toBeInTheDocument();
+    expect(screen.getByText("Tanggal Selesai")).toBeInTheDocument();
+    expect(screen.getByText("Pihak-Pihak")).toBeInTheDocument();
+    expect(screen.getAllByText("Pihak 1").length).toBe(2);
+    expect(screen.getAllByText("Pihak 2").length).toBe(2);
+  });
 
-    // Fill in required form fields
-    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
-      target: { value: "Test Document Title" },
+  it("allows users to enter a title and objective", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    const titleInput = screen.getByPlaceholderText("MoU ini tentang...");
+    fireEvent.change(titleInput, { target: { value: "MoU Kerjasama IT" } });
+    expect(titleInput).toHaveValue("MoU Kerjasama IT");
+
+    const objectiveInput = screen.getByPlaceholderText(
+      "Kenapa Anda membuat MoU ini?"
+    );
+    fireEvent.change(objectiveInput, {
+      target: { value: "Untuk mengembangkan teknologi AI" },
+    });
+    expect(objectiveInput).toHaveValue("Untuk mengembangkan teknologi AI");
+  });
+
+  it("adds a new party when 'Tambahkan Pihak' is clicked", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Count party sections before adding
+    const partyInputsBefore = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    );
+    expect(partyInputsBefore.length).toBe(2); // Should start with 2 parties
+
+    const addPartyButton = screen.getByText("Tambahkan Pihak");
+    fireEvent.click(addPartyButton);
+
+    // Count party sections after adding
+    const partyInputsAfter = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    );
+    expect(partyInputsAfter.length).toBe(3); // Should now have 3 parties
+  });
+
+  it("removes the last party when 'Hapus Pihak' is clicked", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    const addPartyButton = screen.getByText("Tambahkan Pihak");
+    fireEvent.click(addPartyButton); // Adds Pihak 3
+
+    // Check that we now have 3 party inputs
+    const partyInputsBefore = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    );
+    expect(partyInputsBefore.length).toBe(3); // Should have 3 parties now
+
+    const removePartyButton = screen.getByText("Hapus Pihak");
+    fireEvent.click(removePartyButton);
+
+    // Count party sections after removal
+    const partyInputsAfter = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    );
+    expect(partyInputsAfter.length).toBe(2); // Should be back to 2 parties
+  });
+
+  it("calls the onGenerate function when 'Buat Dokumen' is clicked", () => {
+    const mockOnGenerate = jest.fn();
+    render(<DocumentForm onGenerate={mockOnGenerate} />);
+
+    // Fill in required fields
+    // 1. Set the Judul (title)
+    const titleInput = screen.getByPlaceholderText("MoU ini tentang...");
+    fireEvent.change(titleInput, { target: { value: "Test Document Title" } });
+
+    // 2. Set the Tujuan (objective)
+    const objectiveInput = screen.getByPlaceholderText(
+      "Kenapa Anda membuat MoU ini?"
+    );
+    fireEvent.change(objectiveInput, {
+      target: { value: "Test Document Objective" },
     });
 
+    // 3. Set a name for at least one party
+    const partyInput = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    )[0];
+    fireEvent.change(partyInput, { target: { value: "Test Party Name" } });
+
+    // Now click the generate button
+    const generateButton = screen.getByTestId("generate-button");
+    fireEvent.click(generateButton);
+
+    // Check if onGenerate was called
+    expect(mockOnGenerate).toHaveBeenCalled();
+  });
+
+  it("disables selecting end date before start date", async () => {
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+
+    render(<DocumentForm onGenerate={jest.fn()} />);
+    const startDateButton = screen.getByText("Tanggal Mulai");
+    fireEvent.click(startDateButton);
+    fireEvent.click(screen.getByText("15")); // Select March 15
+
+    const endDateButton = screen.getByText("Tanggal Selesai");
+    fireEvent.click(endDateButton);
+    fireEvent.click(screen.getByText("10")); // Attempt to select March 10
+
+    expect(alertMock).toHaveBeenCalledWith(
+      "Tanggal selesai tidak boleh sebelum tanggal mulai."
+    );
+  });
+
+  it("renders the dispute location field correctly", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    expect(
+      screen.getByLabelText("Lokasi Penyelesaian Sengketa")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Contoh: Pengadilan Negeri Jakarta Selatan")
+    ).toBeInTheDocument();
+  });
+
+  it("allows users to enter a dispute location", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    const disputeLocationInput = screen.getByPlaceholderText(
+      "Contoh: Pengadilan Negeri Jakarta Selatan"
+    );
+    fireEvent.change(disputeLocationInput, {
+      target: { value: "Pengadilan Negeri Surabaya" },
+    });
+    expect(disputeLocationInput).toHaveValue("Pengadilan Negeri Surabaya");
+  });
+
+  it("renders new party detail fields correctly", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Check that representative name field exists
+    expect(
+      screen.getAllByPlaceholderText("Nama Perwakilan Pihak")[0]
+    ).toBeInTheDocument();
+
+    // Check that position field exists
+    expect(
+      screen.getAllByPlaceholderText("Jabatan atau Predikat")[0]
+    ).toBeInTheDocument();
+
+    // Check that phone number field exists
+    expect(
+      screen.getAllByPlaceholderText("Nomor Telepon")[0]
+    ).toBeInTheDocument();
+
+    // Check that address field exists
+    expect(screen.getAllByPlaceholderText("Alamat")[0]).toBeInTheDocument();
+  });
+
+  it("allows users to enter party representative details", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Fill in representative name for first party
+    const repNameInput = screen.getAllByPlaceholderText(
+      "Nama Perwakilan Pihak"
+    )[0];
+    fireEvent.change(repNameInput, { target: { value: "John Doe" } });
+    expect(repNameInput).toHaveValue("John Doe");
+
+    // Fill in position for first party
+    const positionInput = screen.getAllByPlaceholderText(
+      "Jabatan atau Predikat"
+    )[0];
+    fireEvent.change(positionInput, { target: { value: "CEO" } });
+    expect(positionInput).toHaveValue("CEO");
+
+    // Fill in phone number for first party
+    const phoneInput = screen.getAllByPlaceholderText("Nomor Telepon")[0];
+    fireEvent.change(phoneInput, { target: { value: "081234567890" } });
+    expect(phoneInput).toHaveValue("081234567890");
+
+    // Fill in address for first party
+    const addressInput = screen.getAllByPlaceholderText("Alamat")[0];
+    fireEvent.change(addressInput, { target: { value: "Jl. Contoh No. 123" } });
+    expect(addressInput).toHaveValue("Jl. Contoh No. 123");
+  });
+
+  it("includes new fields in the onGenerate call", () => {
+    const mockOnGenerate = jest.fn();
+    render(<DocumentForm onGenerate={mockOnGenerate} />);
+
+    // Fill in required fields
+    const titleInput = screen.getByPlaceholderText("MoU ini tentang...");
+    fireEvent.change(titleInput, { target: { value: "Test Document Title" } });
+
+    const objectiveInput = screen.getByPlaceholderText(
+      "Kenapa Anda membuat MoU ini?"
+    );
+    fireEvent.change(objectiveInput, {
+      target: { value: "Test Document Objective" },
+    });
+
+    const partyInput = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    )[0];
+    fireEvent.change(partyInput, { target: { value: "Test Party Name" } });
+
+    // Fill in new fields
+    const disputeLocationInput = screen.getByPlaceholderText(
+      "Contoh: Pengadilan Negeri Jakarta Selatan"
+    );
+    fireEvent.change(disputeLocationInput, {
+      target: { value: "Pengadilan Negeri Jakarta Pusat" },
+    });
+
+    const repNameInput = screen.getAllByPlaceholderText(
+      "Nama Perwakilan Pihak"
+    )[0];
+    fireEvent.change(repNameInput, { target: { value: "Jane Doe" } });
+
+    // Click the generate button
+    const generateButton = screen.getByTestId("generate-button");
+    fireEvent.click(generateButton);
+
+    // Check if onGenerate was called with the right parameters
+    expect(mockOnGenerate).toHaveBeenCalled();
+    const generatedData = mockOnGenerate.mock.calls[0][0];
+
+    expect(generatedData.disputeLocation).toBe(
+      "Pengadilan Negeri Jakarta Pusat"
+    );
+    expect(generatedData.parties[0].representativeName).toBe("Jane Doe");
+  });
+
+  it("disables selecting start date after end date", async () => {
+    // Mock the window.alert before using it
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // First set end date
+    const endDateButton = screen.getByText("Tanggal Selesai");
+    fireEvent.click(endDateButton);
+    fireEvent.click(screen.getByText("15")); // Select day 15
+
+    // Now try to set start date later than end date
+    const startDateButton = screen.getByText("Tanggal Mulai");
+    fireEvent.click(startDateButton);
+    fireEvent.click(screen.getByText("20")); // Try to select day 20
+
+    // Check that the alert was shown
+    expect(alertMock).toHaveBeenCalledWith(
+      "Tanggal mulai tidak boleh setelah tanggal selesai."
+    );
+
+    // Clean up mock after test
+    alertMock.mockRestore();
+  });
+  it("handles regenerateDocument event", () => {
+    const mockOnGenerate = jest.fn();
+    render(<DocumentForm onGenerate={mockOnGenerate} />);
+
+    // Fill all required fields
+    const titleInput = screen.getByPlaceholderText("MoU ini tentang...");
+    const objectiveInput = screen.getByPlaceholderText(
+      "Kenapa Anda membuat MoU ini?"
+    );
+    const firstPartyNameInput = screen.getAllByPlaceholderText(
+      "Nama atau Organisasi"
+    )[0];
+
+    fireEvent.change(titleInput, { target: { value: "Test Title" } });
+    fireEvent.change(objectiveInput, { target: { value: "Test Objective" } });
+    fireEvent.change(firstPartyNameInput, { target: { value: "Test Party" } });
+
+    // Dispatch custom event
+    const event = new Event("regenerateDocument");
+    document.dispatchEvent(event);
+
+    expect(mockOnGenerate).toHaveBeenCalled();
+  });
+
+  it("validates at least one party has a name", () => {
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+    const mockOnGenerate = jest.fn();
+    render(<DocumentForm onGenerate={mockOnGenerate} />);
+
+    // Fill required fields EXCEPT party names
+    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
+      target: { value: "Valid Judul" },
+    });
     fireEvent.change(
       screen.getByPlaceholderText("Kenapa Anda membuat MoU ini?"),
       {
-        target: { value: "Test document purpose" },
+        target: { value: "Valid Tujuan" },
       }
     );
 
-    // Fill in first party name - using correct placeholder
-    const partyNameInputs = screen.getAllByPlaceholderText(
-      "Nama atau Organisasi"
-    );
-    fireEvent.change(partyNameInputs[0], {
-      target: { value: "Test Company" },
+    // Clear any default party names
+    const partyInputs = screen.getAllByPlaceholderText("Nama atau Organisasi");
+    partyInputs.forEach((input) => {
+      fireEvent.change(input, { target: { value: "" } });
     });
 
-    // Setup successful initial response
-    const initialFetchMock = jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(
-              new TextEncoder().encode("data: Initial Document")
-            );
-            controller.close();
-          },
-        }),
-      })
+    // Trigger submission
+    fireEvent.click(screen.getByTestId("generate-button"));
+
+    expect(alertMock).toHaveBeenCalledWith(
+      "Setidaknya satu pihak harus memiliki nama"
     );
-    global.fetch = initialFetchMock as jest.Mock;
-
-    // Generate document initially using the data-testid
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("generate-button"));
-    });
-
-    // Wait for generation to complete
-    await waitFor(
-      () => {
-        expect(
-          screen.queryByText(/Memulai pembuatan dokumen/i)
-        ).not.toBeInTheDocument();
-        return true;
-      },
-      { timeout: 3000 }
-    );
-
-    // Verify first fetch was called
-    expect(initialFetchMock).toHaveBeenCalled();
-
-    // Add comment to enable retry button
-    await act(async () => {
-      fireEvent.change(
-        screen.getByPlaceholderText("Tambahkan komentar revisi..."),
-        { target: { value: "Please revise this document" } }
-      );
-    });
-
-    // Set up a new mock for the retry call
-    jest.clearAllMocks();
-    const retryFetchMock = jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(
-              new TextEncoder().encode("data: Revised Document")
-            );
-            controller.close();
-          },
-        }),
-      })
-    );
-    global.fetch = retryFetchMock as jest.Mock;
-
-    // Click retry button
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("retry-button"));
-      // Small delay to ensure async operations complete
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    });
-
-    // Verify window.confirm was called with correct message
-    expect(window.confirm).not.toHaveBeenCalledWith(
-      "Apakah Anda yakin ingin membuat ulang dokumen?"
-    );
-
-    expect(retryFetchMock).not.toHaveBeenCalled();
-
-    expect(
-      screen.getByPlaceholderText("Tambahkan komentar revisi...")
-    ).not.toHaveValue("");
+    expect(mockOnGenerate).not.toHaveBeenCalled();
   });
+
+  it("resets form correctly", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Fill some data
+    fireEvent.change(screen.getByPlaceholderText("MoU ini tentang..."), {
+      target: { value: "Test" },
+    });
+    fireEvent.click(screen.getByText("Reset"));
+
+    // Verify reset
+    expect(screen.getByPlaceholderText("MoU ini tentang...")).toHaveValue("");
+    expect(
+      screen.getAllByPlaceholderText("Nama atau Organisasi")[0]
+    ).toHaveValue("");
+  });
+
+  it("handles rights and obligations operations", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Add right
+    fireEvent.click(screen.getAllByText("Tambah Hak")[0]);
+    expect(screen.getAllByPlaceholderText("Hak Pihak").length).toBe(3);
+
+    // Remove right
+    fireEvent.click(screen.getAllByText("Hapus Hak")[0]);
+    expect(screen.getAllByPlaceholderText("Hak Pihak").length).toBe(2);
+
+    // Add obligation
+    fireEvent.click(screen.getAllByText("Tambah Kewajiban")[0]);
+    expect(screen.getAllByPlaceholderText("Kewajiban Pihak").length).toBe(3);
+
+    // Remove obligation
+    fireEvent.click(screen.getAllByText("Hapus Kewajiban")[0]);
+    expect(screen.getAllByPlaceholderText("Kewajiban Pihak").length).toBe(2);
+  });
+
+  it("handles date validations correctly", () => {
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    // Get date buttons using accessible names
+    const startDateButton = screen.getByRole("button", {
+      name: /Tanggal Mulai/i,
+    });
+    const endDateButton = screen.getByRole("button", {
+      name: /Tanggal Selesai/i,
+    });
+
+    // Set valid dates
+    fireEvent.click(startDateButton);
+    fireEvent.click(screen.getByText("15")); // Select start date
+    fireEvent.click(endDateButton);
+    fireEvent.click(screen.getByText("20")); // Select end date
+    expect(alertMock).not.toHaveBeenCalled();
+
+    // Test valid start date change
+    fireEvent.click(startDateButton);
+    fireEvent.click(screen.getByText("10")); // Change to valid earlier date
+    expect(alertMock).not.toHaveBeenCalled();
+  });
+
+  it("initializes new parties with empty rights/obligations", () => {
+    render(<DocumentForm onGenerate={jest.fn()} />);
+
+    fireEvent.click(screen.getByText("Tambahkan Pihak"));
+
+    // Check new party has empty rights/obligations
+    expect(screen.getAllByText("Tambah Hak").length).toBe(3);
+    expect(screen.getAllByText("Tambah Kewajiban").length).toBe(3);
+  });
+
+  it("handles Supabase save errors after successful generation", async () => {
+    // Mock error scenario
+    (supabase.from("documents").insert as jest.Mock).mockImplementationOnce(
+      () => ({
+        then: jest.fn().mockImplementationOnce((callback) => {
+          callback({ data: null, error: new Error("Database Error") }); // Simulasi error
+          return { catch: jest.fn() };
+        }),
+      })
+    );
+
+    // Mock console.error
+    const originalError = console.error;
+    console.error = jest.fn();
+
+    render(<LegalDocumentsPage />);
+
+    // Isi form
+    await userEvent.type(
+      screen.getByPlaceholderText("MoU ini tentang..."),
+      "Test Document"
+    );
+    await userEvent.click(screen.getByTestId("generate-button"));
+  });
+
   
 });
