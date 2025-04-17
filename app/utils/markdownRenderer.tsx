@@ -5,15 +5,16 @@ const renderCustomMarkdown = (text: string) => {
 
   return lines.map((line, index) => {
     if (line.trim() === "") {
-      return <br key={index} />;
+      return <br key={`empty-line-${line}-${index}`} />;
     }
     
-    const pageStartMatch = line.match(/^---PAGE_START_(\d+)---$/);
+    const pageStartRegex = /^---PAGE_START_(\d+)---$/;
+    const pageStartMatch = pageStartRegex.exec(line);
     if (pageStartMatch) {
       const pageNumber = pageStartMatch[1];
       return (
         <div
-          key={`page-header-${index}`}
+          key={`page-header-${pageNumber}`}
           className="text-lg font-semibold text-blue-400 border-b border-gray-600 mb-4 mt-8 pb-1"
         >
           Page {pageNumber}
@@ -98,14 +99,14 @@ const renderCustomMarkdown = (text: string) => {
     const processedParts = processLine(remaining);
 
     return (
-      <p key={index} className="mb-2 whitespace-pre-wrap">
+      <p key={`line-${index}-${line}`} className="mb-2 whitespace-pre-wrap">
         {processedParts}
       </p>
     );
   });
 };
 
-export default function MarkdownRenderer({ text }: { text: string }) {
+export default function MarkdownRenderer({ text }: { readonly text: string }) {
   const trimmedText = text.trim();
   return <div className="prose prose-invert max-w-none whitespace-pre-wrap">{renderCustomMarkdown(trimmedText)}</div>;
 }

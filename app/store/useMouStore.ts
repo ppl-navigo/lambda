@@ -41,7 +41,7 @@ export const useMouStore = create<MouStore>((set) => ({
         ...risks.map(risk => ({
           ...risk,
           id: risk.id || uuidv4(), // Generate ID jika belum ada
-          revisedClause: risk.revisedClause || ""
+          revisedClause: risk.revisedClause ?? ""
         }))
       ],
     })),
