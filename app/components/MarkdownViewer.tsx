@@ -1,108 +1,19 @@
 "use client";
 
 import React, { useCallback, useState, useEffect } from "react";
-import { FaSpinner } from "react-icons/fa";
 import { useMouStore, RiskyClause } from "@/app/store/useMouStore";
 import { v4 as uuidv4 } from 'uuid';
 import { SYSTEM_PROMPT_REVISION, SYSTEM_PROMPT_ANALYZE, SYSTEM_PROMPT_ORGANIZE, 
         SYSTEM_PROMPT_UPDATE, SYSTEM_PROMPT_USER_EDIT } from "@/app/utils/prompt";
 import { apiRequest } from "@/app/utils/apiRequest";
 import { fetchFileAndExtractText } from "@/app/utils/fileUtils";
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
+import RiskClausesLayout from "./RiskClausesLayout";
 import 'react-toastify/dist/ReactToastify.css';
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
 }
-
-export const RiskItem: React.FC<{ 
-  risk: RiskyClause; 
-  isSelected: boolean;
-  onSelect: (id: string, isSelected: boolean) => void;  // New handler for selecting clauses
-  onRevise: (risk: RiskyClause) => void;
-  onApply: (risk: RiskyClause) => void;
-  isLoading: boolean;  // Track the loading state for each risk
-}> = ({ risk, isSelected, onSelect, onRevise, onApply, isLoading }) => {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div className="mb-4 border-b border-gray-700 pb-2" id={risk.id}>
-      <div className="flex items-center">
-      {/* Checkbox for selecting the clause on the left */}
-      <input
-        type="checkbox"
-        checked={isSelected}
-        onChange={(e) => onSelect(risk.id, e.target.checked)}  // Handle checkbox change
-        className="mr-2"
-      />
-      
-      {/* Title beside checkbox on the left */}
-      <h3 className="text-base font-semibold flex-1">📌 {risk.title}</h3>
-      
-      {/* Expand button on the far right */}
-      <button 
-        className="text-sm text-blue-400 focus:outline-none"
-        onClick={() => setExpanded(!expanded)}  // Toggle expansion on button click
-      >
-        {expanded ? "Collapse" : "Expand"}
-      </button>
-    </div>
-
-      {expanded && (
-        <div className="mt-2 text-sm">
-          <p>
-            <strong>🔍 Risky Text:</strong> {risk.originalClause}
-          </p>
-          <p className="mt-1">
-            <strong>⚠️ Reason:</strong> {risk.reason}
-          </p>
-          
-          <div className="mt-2 space-y-2">
-            {!risk.revisedClause && isLoading && (
-              <p className="mt-1 text-yellow-400">⏳ Generating revision...</p>
-            )}
-
-            {risk.revisedClause && (
-              <>
-              <p className="mt-1">
-                {(() => {
-                  console.log("Rendering revised clause:", risk.revisedClause);
-                  return null;
-                })()}
-                <strong>📝 Suggested Revision:</strong> {risk.revisedClause}
-              </p>
-              </>
-            )}
-
-            {!risk.revisedClause && !isLoading && (
-              <button
-                className="mt-2 bg-blue-500 text-white px-2 py-1 rounded"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRevise(risk);  // Call onRevise to get the revision
-                }}
-              >
-                Get Revision
-              </button>
-            )}
-
-            {risk.revisedClause && (
-              <button
-                className="mt-2 bg-green-600 px-2 py-1 text-white rounded"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onApply(risk);  // Apply the suggestion
-                }}
-              >
-                Apply Suggestion
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) => {
   const { pagesContent, setPagesContent, setRiskyClauses } = useMouStore();
@@ -239,7 +150,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       const currentPagesContent = useMouStore.getState().pagesContent;
       const originalPageContent = currentPagesContent.find(
         p => p.sectionNumber === risk.sectionNumber
-      )?.content || '';
+      )?.content ?? '';
       
       // Remove highlight tags from the original content
       const cleanedOriginalContent = originalPageContent.replace(
@@ -254,7 +165,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       const systemPrompt = SYSTEM_PROMPT_UPDATE
       .replace("{originalPageContent}", cleanedOriginalContent)
       .replace("{originalClause}", risk.currentClause)
-      .replace("{suggestion}", risk.revisedClause || "");
+      .replace("{suggestion}", risk.revisedClause ?? "");
       
       const revisedPageContent = await apiRequest(systemPrompt, "", "Error applying revision");
 
@@ -265,7 +176,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
       setRisks((prev) =>
         prev.map((r) =>
-          r.id === risk.id ? { ...r, currentClause: risk.revisedClause || "" } : r
+          r.id === risk.id ? { ...r, currentClause: risk.revisedClause ?? "" } : r
         )
       );
       toast.success("Revisi berhasil diterapkan!");
@@ -311,7 +222,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       for (const selectedRisk of selectedRiskClauses) {
         const systemPrompt = SYSTEM_PROMPT_USER_EDIT
           .replace("{riskyText}", selectedRisk.currentClause)
-          .replace("{revisedClause}", selectedRisk.revisedClause || "")
+          .replace("{revisedClause}", selectedRisk.revisedClause ?? "")
           .replace("{chatPrompt}", chatPrompt || "");
   
         // 2. Request revision from LLM
@@ -342,78 +253,23 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   };
 
   return (
-    <div className="h-screen flex flex-col relative">
-      <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} />
-      {/* Main Content Area with scroll */}
-      <div className="bg-[#1A1A1A] text-white p-4 rounded-md flex-1 overflow-y-auto">
-        {loading && processedPages.length === 0 && (
-          <div className="flex justify-center items-center h-full">
-            <FaSpinner data-testid="spinner" className="text-4xl animate-spin" />
-          </div>
-        )}
-  
-        {error && <p className="text-red-500 text-center">{error}</p>}
-  
-        {!loading && !error && risks.length === 0 && (
-          <p className="text-gray-400 text-center">No risks found.</p>
-        )}
-  
-        {Object.entries(
-          risks.reduce((acc, risk) => {
-            acc[risk.sectionNumber] = acc[risk.sectionNumber] || [];
-            acc[risk.sectionNumber].push(risk);
-            return acc;
-          }, {} as Record<number, RiskyClause[]>)
-        ).map(([sectionNumber, group]) => (
-          <div key={sectionNumber} className="mb-6">
-            <h2 className="text-base font-bold mb-2 text-blue-300">Page {sectionNumber}</h2>
-            {group.map((risk) => (
-              <RiskItem 
-              key={risk.id}
-              risk={risk}
-              isSelected={selectedRisks.has(risk.id)}
-              onSelect={handleSelectClause}
-              onRevise={handleRevise}
-              onApply={handleApplySuggestion}
-              isLoading={loadingStates[risk.id] || false}  // Pass isLoading for each risk
-            />
-            ))}
-          </div>
-        ))}
-      </div>
-  
-      {/* Floating Chatbar */}
-      <div className="absolute bottom-0 left-0 right-0 z-50 bg-[#2A2A2A] border-t border-gray-700 p-4">
-        <div className="relative">
-          <div className={`flex gap-2 items-center`}>
-            {/* Chat Input for revision instructions */}
-            <input
-              type="text"
-              placeholder={
-                selectedRisks.size > 0 
-                  ? "Type your revision instructions..." 
-                  : "Select clauses to revise..."
-              }
-              className="flex-1 p-2 rounded-lg bg-gray-800 text-white"
-              value={chatPrompt}
-              onChange={(e) => setChatPrompt(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendPrompt()}
-              disabled={selectedRisks.size === 0}  // Disable if no clauses are selected
-            />
-            
-            {/* Revise Button */}
-            <button
-              className={`px-4 py-2 rounded-lg ${isSending || selectedRisks.size === 0 ? 'bg-gray-600' : 'bg-blue-600'} text-white`}
-              onClick={handleSendPrompt}
-              disabled={isSending || selectedRisks.size === 0}
-            >
-              {isSending ? 'Generating...' : 'Revise'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );});
+    <RiskClausesLayout
+      risks={risks}
+      loading={loading}
+      processedPages={processedPages}
+      error={error}
+      selectedRisks={selectedRisks}
+      loadingStates={loadingStates}
+      handleSelectClause={handleSelectClause}
+      handleRevise={handleRevise}
+      handleApplySuggestion={handleApplySuggestion}
+      chatPrompt={chatPrompt}
+      setChatPrompt={setChatPrompt}
+      isSending={isSending}
+      handleSendPrompt={handleSendPrompt}
+    />
+  );
+  });
 
 MarkdownViewer.displayName = "MarkdownViewer";
 export default MarkdownViewer;
