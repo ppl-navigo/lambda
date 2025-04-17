@@ -17,28 +17,41 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
   const [loading, setLoading] = useState(false);
   const [showEdited, setShowEdited] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const streamCtrl = useRef<AbortController | null>(null);
   
+  /* ---------- start stream ---------- */
   const handleGenerateEditedText = async () => {
-    if (!revisedText) {
-      setLoading(true);
-      try {
-        const fullText = pagesContent
-          .map((page) => `---PAGE_START_${page.sectionNumber}---\n${page.content}`)
-          .join("\n");
-        // Simulate streaming and set revisedText
-        // (Replace this with your real streamer)
-        import("../utils/textStreamer").then(({ TextStreamer }) => {
-          TextStreamer.simulateStream(fullText, 100, 100, (chunk: string) => {
-            setRevisedText((prev) => prev + chunk);
-          });
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
+    if (streamCtrl.current) return;              // already running
     setShowEdited(true);
+
+    setLoading(true);
+    try {
+      const fullText = pagesContent
+        .map(p => `---PAGE_START_${p.sectionNumber}---\n${p.content}`)
+        .join("\n");
+
+      /* create a fresh controller for this run */
+      const ctrl = new AbortController();
+      streamCtrl.current = ctrl;
+
+      setRevisedText("");                        // clear before streaming
+      const { TextStreamer } = await import("../utils/textStreamer");
+
+      TextStreamer.simulateStream(
+        fullText,
+        100,
+        100,
+        chunk => {
+          if (!ctrl.signal.aborted) {
+            setRevisedText(prev => prev + chunk);
+          }
+        }
+      );
+    } finally {
+      setLoading(false);
+      streamCtrl.current = null;                 // finished
+    }
   };
-  
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -47,14 +60,23 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
     }
   }, [revisedText, isEditing]);
 
+  /* ---------- stop the stream whenever we rebuild text ---------- */
   useEffect(() => {
     if (showEdited && !loading && !isEditing) {
+      // 1. cancel old stream
+      streamCtrl.current?.abort();
+      streamCtrl.current = null;
+
+      // 2. rebuild from fresh pagesContent
       const newText = pagesContent
         .map(p => `---PAGE_START_${p.sectionNumber}---\n${p.content}`)
-        .join('\n');
+        .join("\n");
       setRevisedText(newText);
     }
   }, [pagesContent, showEdited, loading, isEditing]);
+
+  /* ---------- also abort on unmount ---------- */
+  useEffect(() => () => streamCtrl.current?.abort(), []);
 
   const handleToggleEdit = () => {
     if (isEditing) {
