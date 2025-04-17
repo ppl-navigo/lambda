@@ -2,8 +2,13 @@ import React from "react";
 import { render, screen, waitFor, fireEvent, act, cleanup} from "@testing-library/react";
 import axios from "axios";
 import MarkdownViewer from "@/app/components/MarkdownViewer";
-import { apiRequest } from "@/app/utils/apiRequest";
-import { toast } from 'react-toastify';
+
+jest.mock("p-limit", () => {
+  return () => {
+    const limit = (fn: any) => fn(); // run instantly
+    return limit;
+  };
+});
 
 jest.mock('react-toastify', () => {
   const actualModule = jest.requireActual('react-toastify');
@@ -49,9 +54,7 @@ jest.mock("@/app/utils/fileUtils", () => ({
 
 const mockedApiRequest = require("@/app/utils/apiRequest").apiRequest;
 
-global.ReadableStream = class {
-  constructor() {}
-} as any;
+global.ReadableStream = function () {} as any;
 
 function mockFetchSuccess(responseText: string) {
   global.fetch = jest.fn(async () => ({
@@ -182,8 +185,6 @@ describe("MarkdownViewer Component Tests (Fully Mocked)", () => {
     jest.mock("@/app/utils/apiRequest", () => ({
       apiRequest: jest.fn().mockResolvedValue("Revised text based on reason."),
     }));
-
-    const { apiRequest } = require("@/app/utils/apiRequest");
 
     // Render the component
     await act(async () => {
