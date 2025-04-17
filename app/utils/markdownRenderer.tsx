@@ -28,7 +28,9 @@ const renderCustomMarkdown = (text: string) => {
 
     const processLine = (input: string): JSX.Element[] => {
       const parts: JSX.Element[] = [];
-      const highlightRegex = /<highlight>(.*?)<\/highlight>/g;
+      const highlightRegex = /<highlight>([\s\S]*?)<\/highlight>/g
+
+
 
       let lastIndex = 0;
       let match;
