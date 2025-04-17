@@ -10,13 +10,16 @@ import { fetchFileAndExtractText } from "@/app/utils/fileUtils";
 import { toast } from 'react-toastify';
 import RiskClausesLayout from "./RiskClausesLayout";
 import 'react-toastify/dist/ReactToastify.css';
+import pLimit from "p-limit";
+
+const CONCURRENCY = 3;               // tune: 3‑4 is usually optimal
+const limit       = pLimit(CONCURRENCY);
 
 interface MarkdownViewerProps {
   pdfUrl: string | null;
 }
 
 const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) => {
-  const { pagesContent, setPagesContent, setRiskyClauses } = useMouStore();
   const [risks, setRisks] = useState<RiskyClause[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});  // Loading state for each risk
@@ -65,42 +68,56 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
         setLoading(false);
       }
   },[]);
+
+  const commitOrderedPage = (page: { sectionNumber: number; content: string }) =>
+    useMouStore.setState(state => {
+      /* replace if we already have this section, otherwise add it */
+      const without = state.pagesContent.filter(
+        p => p.sectionNumber !== page.sectionNumber
+      );
+      const ordered = [...without, page].sort(
+        (a, b) => a.sectionNumber - b.sectionNumber
+      );
+      return { pagesContent: ordered };
+    });
+
+    const processDocument = useCallback(async () => {
+      if (!pdfUrl) return;
+      setLoading(true);
+      setError("");
     
-  const processDocument = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    if (!pdfUrl) return;
-
-    try {
-      const pages = await downloadFileAndExtractText(pdfUrl);
-
-      for (let i = 0; i < pages.length; i++) {
-        const sectionNumber = i + 1;
-        const rawPageText = pages[i];
-
-        const organizedText = await organizeTextWithLLM(rawPageText);
-        setPagesContent([...pagesContent, { 
-          sectionNumber,  // ← Di sini sudah ditambahkan koma
-          content: organizedText 
-        }]); // ← Tutup array dengan benar
-
-        const risks = await analyzeTextWithAI(organizedText, sectionNumber);
-
-        if (risks.length > 0) {
-          setRiskyClauses(risks);
-          setRisks((prev) => [...prev, ...risks]);
-        }
-
-        setProcessedPages((prev) => [...prev, sectionNumber]);
+      try {
+        const pages = await downloadFileAndExtractText(pdfUrl); // still sequential
+    
+        const tasks = pages.map((rawPageText, idx) =>
+          limit(async () => {
+            const sectionNumber = idx + 1;
+    
+            /* ---------- organize ---------- */
+            const organizedText = await organizeTextWithLLM(rawPageText);
+    
+            /* ordered commit instead of plain push  */
+            commitOrderedPage({ sectionNumber, content: organizedText });
+    
+            /* ---------- analyse ---------- */
+            const pageRisks = await analyzeTextWithAI(organizedText, sectionNumber);
+            if (pageRisks.length) {
+              useMouStore.getState().setRiskyClauses(pageRisks);
+              setRisks(prev => [...prev, ...pageRisks]);
+            }
+    
+            setProcessedPages(prev => [...prev, sectionNumber]); // progress bar
+          })
+        );
+    
+        await Promise.all(tasks); // max 3 running simultaneously
+      } catch (err) {
+        console.error("❌ Gagal menganalisis dokumen:", err);
+        setError("Gagal menganalisis dokumen");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("❌ Gagal menganalisis dokumen:", err);
-      setError("Gagal menganalisis dokumen");
-    } finally {
-      setLoading(false);
-    }
-  }, [pdfUrl, downloadFileAndExtractText]);
+    }, [pdfUrl, downloadFileAndExtractText]);
 
   const cleanText = (text: string) => {
     return text.replace(/\*\*/g, "").trim();
@@ -108,13 +125,15 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
   useEffect(() => {
     if (!pdfUrl) return;
-
-    const timeoutId = setTimeout(() => {
-      processDocument();
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [pdfUrl, processDocument]);
+  
+    /** clear previous PDF data */
+    useMouStore.getState().reset();
+    setRisks([]);
+    setProcessedPages([]);
+  
+    const id = setTimeout(processDocument, 300);
+    return () => clearTimeout(id);
+  }, [pdfUrl]);
 
   const organizeTextWithLLM = async (text: string): Promise<string> => {
     const organizedText = await apiRequest(SYSTEM_PROMPT_ORGANIZE, text, "Error organizing text");
@@ -154,7 +173,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       
       // Remove highlight tags from the original content
       const cleanedOriginalContent = originalPageContent.replace(
-        /<highlight>(.*?)<\/highlight>/g,
+        /<highlight>([\s\S]*?)<\/highlight>/g,
         '$1'
       );
       
