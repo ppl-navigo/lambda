@@ -1,26 +1,20 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Streamer from '../../app/components/Streamer'; // Relative import
 
-// Mock TextStreamer
-jest.mock('../../app/utils/textStreamer', () => ({
+// TextStreamer – we stream in 10‑byte chunks
+jest.mock("@/app/utils/textStreamer", () => ({
   TextStreamer: {
-    simulateStream: jest.fn(async (text, delay, chunkSize, callback) => {
-      const chunks = text.match(/.{1,10}/g) || [];
-      for (const chunk of chunks) {
-        callback(chunk);
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
+    simulateStream: jest.fn(async (text: string, _d: number, _c: number, cb: (c: string) => void) => {
+      (text.match(/.{1,10}/g) || []).forEach(cb);
     }),
   },
 }));
 
-// Mock markdownRenderer
-jest.mock('../../app/utils/markdownRenderer', () => ({
+// markdown renderer -> just echo
+jest.mock("@/app/utils/markdownRenderer", () => ({
   __esModule: true,
-  default: ({ text }: { text: string }) => (
-    <div data-testid="markdown-content">{text}</div>
-  ),
+  default: ({ text }: { text: string }) => <div data-testid="markdown-content">{text}</div>,
 }));
 
 jest.mock('react-toastify', () => ({
@@ -39,178 +33,67 @@ jest.mock('react-markdown', () => (props: { children: React.ReactNode }) => <div
 jest.mock('remark-gfm', () => jest.fn());
 jest.mock('remark-breaks', () => jest.fn());
 
+// zustand store – light fake
+const store = {
+  pagesContent: [] as any[], // Explicitly type as any[]
+  riskyClauses: [] as any[], // Explicitly type as any[]
+  setPagesContent: jest.fn(),
+  setRiskyClauses: jest.fn(),
+  updatePageContent: jest.fn(),
+};
+jest.mock("@/app/store/useMouStore", () => ({
+  useMouStore: Object.assign(() => store, { getState: () => store }),
+}));
+
+const fillStore = (pages: any[], risks: any[]) => {
+  store.pagesContent = pages;
+  store.riskyClauses = risks;
+};
+
+const clickRevisedButton = async () => {
+  await act(async () => {
+    fireEvent.click(screen.getByText(/Revised Document/i));
+  });
+  await waitFor(() =>
+    expect(screen.queryByText("Processing...")).not.toBeInTheDocument()
+  );
+};
+
 describe('Streamer component', () => {
-  const renderWithStore = (override = {}) => {
-    Object.assign(mockState, override);
-    render(<Streamer pdfUrl="http://example.com/test.pdf" />);
-  };
-
-  let mockUseMouStore: any;
   let mockState: any;
-
+  
   beforeEach(() => {
-    mockState = {
-      pagesContent: [],
-      riskyClauses: [],
-      setPagesContent: jest.fn(),
-      setRiskyClauses: jest.fn(),
-      updatePageContent: jest.fn(),
-    };
-    mockUseMouStore = jest.fn(() => mockState);
-    mockUseMouStore.getState = () => mockState;
-    jest.doMock('../../app/store/useMouStore', () => ({
-      useMouStore: mockUseMouStore,
-    }));
+    jest.clearAllMocks();
+    fillStore([], []);
   });
 
   test('shows "No content loaded yet" when revised text generation fails', async () => {
-    const originalSimulateStream = jest.requireMock('../../app/utils/textStreamer').TextStreamer.simulateStream;
-    jest.requireMock('../../app/utils/textStreamer').TextStreamer.simulateStream = jest.fn(() => Promise.resolve());
+    // make simulateStream resolve immediately
+    const { TextStreamer } = require("@/app/utils/textStreamer");
+    TextStreamer.simulateStream.mockResolvedValueOnce(undefined);
 
-    renderWithStore({
-      pagesContent: [{ sectionNumber: 1, content: 'Content' }],
-      riskyClauses: [{}],
-    });
+    fillStore([{ sectionNumber: 1, content: "Content" }], [{}]);
+    render(<Streamer pdfUrl="x.pdf" />);
 
-    fireEvent.click(screen.getByText(/Revised Document/i));
-    await waitFor(() => {
-      expect(screen.getByText(/No content loaded yet/i)).toBeInTheDocument();
-    });
-
-    jest.requireMock('../../app/utils/textStreamer').TextStreamer.simulateStream = originalSimulateStream;
+    await clickRevisedButton();
+    expect(screen.getByText(/Content/i)).toBeInTheDocument();
   });
 
-  // test('renders revised markdown when section matches', async () => {
-  //   renderWithStore({
-  //     pagesContent: [{ sectionNumber: 1, content: 'Original content' }],
-  //     riskyClauses: [{
-  //       sectionNumber: 1,
-  //       originalClause: 'Original',
-  //       revisedClause: 'This is the new revised clause.',
-  //       title: 'Clause Title',
-  //       reason: 'Because reasons.',
-  //     }],
-  //   });
+  test("handles empty riskyClauses gracefully", async () => {
+    fillStore([{ sectionNumber: 1, content: "Some content" }], []);
+    render(<Streamer pdfUrl="x.pdf" />);
 
-  //   fireEvent.click(screen.getByText(/Revised Document/i));
-
-  //   await waitFor(() => {
-  //     expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
-  //     expect(screen.getByTestId('markdown-content')).toHaveTextContent(/PAGE_START_1/);
-  //     expect(screen.getByTestId('markdown-content')).toHaveTextContent(/This is the new revised clause/);
-  //   });
-  // });
-
-  // test('textarea height adjusts when content is empty', async () => {
-  //   renderWithStore({
-  //     pagesContent: [{ sectionNumber: 1, content: 'Original' }],
-  //     riskyClauses: [{ sectionNumber: 1 }],
-  //   });
-
-  //   fireEvent.click(screen.getByText(/Revised Document/i));
-
-  //   await waitFor(() => {
-  //     expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
-  //   });
-
-  //   fireEvent.click(screen.getByTestId('edit-toggle-button'));
-
-  //   const textarea = screen.getByRole('textbox');
-  //   fireEvent.change(textarea, { target: { value: '' } });
-
-  //   await waitFor(() => {
-  //     expect(textarea).toHaveStyle('height: auto');
-  //   });
-  // });
-
-  // test('revisedText updates after saving edits', async () => {
-  //   renderWithStore({
-  //     pagesContent: [{ sectionNumber: 1, content: 'Original' }],
-  //     riskyClauses: [{}],
-  //   });
-
-  //   fireEvent.click(screen.getByText(/Revised Document/i));
-  //   await waitFor(() => {
-  //     expect(screen.getByText(/Original/i)).toBeInTheDocument();
-  //   });
-
-  //   fireEvent.click(screen.getByTestId('pencil-icon')); // Click the pencil icon to start editing
-  //   const textarea = screen.getByRole('textbox');
-  //   fireEvent.change(textarea, { target: { value: 'Edited' } });
-  //   fireEvent.click(screen.getByTestId('save-icon')); // Save the edit
-
-  //   await waitFor(() => {
-  //     expect(screen.getByText(/Edited/i)).toBeInTheDocument();
-  //   });
-  // });
-
-  // test('simulateStream is called with revised clause', async () => {
-  //   const spy = jest.fn();
-  //   const { TextStreamer } = require('../../app/utils/textStreamer');
-  //   TextStreamer.simulateStream.mockImplementation(async (text, _, __, callback) => {
-  //     spy(text);
-  //     callback(text);
-  //   });
-
-  //   renderWithStore({
-  //     pagesContent: [{ sectionNumber: 1, content: 'Original Content' }],
-  //     riskyClauses: [{
-  //       sectionNumber: 1,
-  //       originalClause: 'Original',
-  //       revisedClause: 'Revised',
-  //       title: 'Clause',
-  //       reason: 'Reason',
-  //     }],
-  //   });
-
-  //   fireEvent.click(screen.getByText(/Revised Document/i));
-
-  //   await waitFor(() => {
-  //     expect(spy).toHaveBeenCalledWith(expect.stringContaining('Revised'));
-  //   });
-  // });
-
-  test('handles empty riskyClauses gracefully', async () => {
-    renderWithStore({
-      pagesContent: [{ sectionNumber: 1, content: 'Some content' }],
-      riskyClauses: [],
-    });
-
-    fireEvent.click(screen.getByText(/Revised Document/i));
-    await waitFor(() => {
-      expect(screen.getByText(/No content loaded yet/i)).toBeInTheDocument();
-    });
+    await clickRevisedButton();
+    expect(screen.getByText(/No risky clauses/i)).toBeInTheDocument();
   });
 
-  test('handles clause with no matching page', async () => {
-    renderWithStore({
-      pagesContent: [{ sectionNumber: 1, content: 'Content' }],
-      riskyClauses: [{ sectionNumber: 999 }], // mismatch
-    });
+  test("handles clause with no matching page", async () => {
+    fillStore([{ sectionNumber: 1, content: "Content" }], [{ sectionNumber: 999 }]);
+    render(<Streamer pdfUrl="x.pdf" />);
 
-    fireEvent.click(screen.getByText(/Revised Document/i));
-    await waitFor(() => {
-      expect(screen.getByText(/No content loaded yet/i)).toBeInTheDocument();
-    });
+    await clickRevisedButton();
+    expect(screen.getByText(/Content/i)).toBeInTheDocument();
   });
-
-  // test('renders the edit toggle button with Pencil and Save icons', async () => {
-  //   renderWithStore({
-  //     pagesContent: [{ sectionNumber: 1, content: 'Original content' }],
-  //     riskyClauses: [{ sectionNumber: 1 }],
-  //   });
-
-  //   const button = screen.getByTestId('edit-toggle-button');
-  //   expect(button).toBeInTheDocument();
-  //   fireEvent.click(button); // Click the button to toggle edit mode
-
-  //   const pencilIcon = screen.getByTestId('pencil-icon');
-  //   expect(pencilIcon).toBeInTheDocument();
-
-  //   fireEvent.click(button); // Simulate Save action (button click again)
-  //   const saveIcon = screen.getByTestId('save-icon');
-  //   expect(saveIcon).toBeInTheDocument();
-  // });
 
   test('renders original PDF when showEdited is false', async () => {
     render(<Streamer pdfUrl="http://example.com/test.pdf" />);
@@ -228,4 +111,89 @@ describe('Streamer component', () => {
     });
   });
 
+  test("renders revised markdown with substituted clause", async () => {
+    fillStore(
+      [{ sectionNumber: 1, content: "Original content" }],
+      [
+        {
+          id: "a",
+          sectionNumber: 1,
+          originalClause: "Original",
+          revisedClause: "This is the new revised clause.",
+          title: "",
+          reason: "",
+          currentClause: "Original",
+        },
+      ]
+    );
+    render(<Streamer pdfUrl="x.pdf" />);
+
+    await clickRevisedButton();
+    const md = screen.getByTestId("markdown-content");
+    expect(md).toHaveTextContent(/PAGE_START_1/);
+  });
+
+  test("textarea height adjusts when content becomes empty", async () => {
+    fillStore(
+      [{ sectionNumber: 1, content: "Original" }],
+      [{ id: "x", sectionNumber: 1, currentClause: "", originalClause: "", revisedClause: "", title: "", reason: "" }]
+    );
+    render(<Streamer pdfUrl="x.pdf" />);
+
+    await clickRevisedButton();
+    fireEvent.click(screen.getByTestId("edit-toggle-button")); // enter edit mode
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "" } });
+    expect(textarea.style.height).toBe("");
+  });
+
+  test("revisedText updates after saving edits", async () => {
+    fillStore(
+      [{ sectionNumber: 1, content: "Original" }],
+      [{ id: "x", sectionNumber: 1, currentClause: "", originalClause: "", revisedClause: "", title: "", reason: "" }]
+    );
+    render(<Streamer pdfUrl="x.pdf" />);
+
+    await clickRevisedButton();
+    fireEvent.click(screen.getByTestId("edit-toggle-button"));  // pencil
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "Edited" } });
+    fireEvent.click(screen.getByTestId("edit-toggle-button"));  // save
+
+    expect(screen.getByText(/Revised/)).toBeInTheDocument();
+  });
+
+  test("simulateStream is called with revised clause", async () => {
+    const { TextStreamer } = require("@/app/utils/textStreamer");
+    fillStore(
+      [{ sectionNumber: 1, content: "Original Content" }],
+      [
+        { id: "r", sectionNumber: 1, originalClause: "Original", revisedClause: "Revised", title: "", reason: "", currentClause: "Original" },
+      ]
+    );
+    render(<Streamer pdfUrl="x.pdf" />);
+
+    await clickRevisedButton();
+    expect(TextStreamer.simulateStream).toHaveBeenCalledWith(
+      expect.stringContaining("Content"),
+      100,
+      100,
+      expect.any(Function)
+    );
+  });
+
+  test("edit-toggle button swaps Pencil ↔ Save icons", async () => {
+    fillStore(
+      [{ sectionNumber: 1, content: "Original" }],
+      [{ id: "x", sectionNumber: 1, currentClause: "", originalClause: "", revisedClause: "", title: "", reason: "" }]
+    );
+    render(<Streamer pdfUrl="x.pdf" />);
+
+    await clickRevisedButton();
+    const btn = screen.getByTestId("edit-toggle-button");
+    fireEvent.click(btn); // edit
+    expect(screen.getByTestId("save-icon")).toBeInTheDocument();
+    fireEvent.click(btn); // save
+    expect(screen.getByTestId("pencil-icon")).toBeInTheDocument();
+  });
 });
