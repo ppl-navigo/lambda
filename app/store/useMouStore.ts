@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { v4 as uuidv4 } from 'uuid';
 
 export interface PageSection {
   sectionNumber: number;
@@ -6,12 +7,13 @@ export interface PageSection {
 }
 
 export interface RiskyClause {
+  id: string;
   sectionNumber: number;
   title: string;
   originalClause: string;
   reason: string;
   revisedClause?: string;
-  suggestion?: string;
+  currentClause: string;
 }
 
 interface MouStore {
@@ -19,17 +21,44 @@ interface MouStore {
   riskyClauses: RiskyClause[];
   setPagesContent: (pages: PageSection[]) => void;
   setRiskyClauses: (risks: RiskyClause[]) => void;
+  updatePageContent: (sectionNumber: number, newContent: string) => void;
+  updateRiskyClause: (id: string, updates: Partial<RiskyClause>) => void;
 }
 
 export const useMouStore = create<MouStore>((set) => ({
   pagesContent: [],
   riskyClauses: [],
+  
   setPagesContent: (newPages) =>
     set((state) => ({
       pagesContent: [...state.pagesContent, ...newPages],
-    })),  
+    })),
+
   setRiskyClauses: (risks) =>
     set((state) => ({
-      riskyClauses: [...state.riskyClauses, ...risks],
+      riskyClauses: [
+        ...state.riskyClauses,
+        ...risks.map(risk => ({
+          ...risk,
+          id: risk.id || uuidv4(), // Generate ID jika belum ada
+          revisedClause: risk.revisedClause || ""
+        }))
+      ],
+    })),
+
+  updatePageContent: (sectionNumber, newContent) =>
+    set((state) => ({
+      pagesContent: state.pagesContent.map((page) =>
+        page.sectionNumber === sectionNumber 
+          ? { ...page, content: newContent } 
+          : page
+      ),
+    })),
+
+  updateRiskyClause: (id, updates) =>
+    set((state) => ({
+      riskyClauses: state.riskyClauses.map(risk =>
+        risk.id === id ? { ...risk, ...updates } : risk
+      ),
     })),
 }));
