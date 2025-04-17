@@ -37,8 +37,6 @@ const MouAnalyzer = () => {
               <div className="col-span-2 overflow-y-auto">
                 <Streamer
                   pdfUrl={pdfUrl}
-                  editedPdfUrl={editedPdfUrl}
-                  setEditedPdfUrl={setEditedPdfUrl}
                 />
               </div>
             </div>
