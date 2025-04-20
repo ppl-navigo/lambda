@@ -1,6 +1,21 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Streamer from '../../app/components/Streamer'; // Relative import
+import { Document, Packer, Paragraph, TextRun } from "docx";
+
+
+jest.mock('docx', () => ({
+  ...jest.requireActual('docx'),
+  Document: jest.fn().mockImplementation(() => ({
+    // Mock minimal untuk test
+    sections: [],
+  })),
+  Packer: {
+    toBlob: jest.fn().mockResolvedValue(new Blob()),
+  },
+  Paragraph: jest.fn().mockImplementation((args) => args),
+  TextRun: jest.fn().mockImplementation((args) => args),
+}));
 
 // TextStreamer – we stream in 10‑byte chunks
 jest.mock("@/app/utils/textStreamer", () => ({
@@ -64,7 +79,20 @@ describe('Streamer component', () => {
   
   beforeEach(() => {
     jest.clearAllMocks();
-    fillStore([], []);
+    fillStore([
+      { sectionNumber: 1, content: "# Page 1 Content" },
+      { sectionNumber: 2, content: "## Page 2 Content" },
+    ], []);
+    
+    // Tambahkan risky clauses untuk memastikan button muncul
+    store.riskyClauses = [{
+      id: "1",
+      sectionNumber: 1,
+      originalClause: "Original",
+      revisedClause: "Revised",
+      title: "",
+      reason: ""
+    }];
   });
 
   test('shows "No content loaded yet" when revised text generation fails', async () => {
@@ -195,5 +223,107 @@ describe('Streamer component', () => {
     expect(screen.getByTestId("save-icon")).toBeInTheDocument();
     fireEvent.click(btn); // save
     expect(screen.getByTestId("pencil-icon")).toBeInTheDocument();
+  });
+
+  describe('Download Button Functionality', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      fillStore([
+        { sectionNumber: 1, content: "# Page 1 Content" },
+        { sectionNumber: 2, content: "## Page 2 Content" },
+      ], []);
+    });
+  
+    test('opens page selection modal when download button clicked', async () => {
+      render(<Streamer pdfUrl="x.pdf" />);
+      await clickRevisedButton();
+      
+      fireEvent.click(screen.getByRole('button', { name: /download-button/i }));
+      
+      expect(screen.getByText('Select Pages to Download')).toBeInTheDocument();
+      expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    });
+  
+    test('downloads selected pages as DOCX', async () => {
+      const mockToBlob = jest.spyOn(Packer, 'toBlob').mockResolvedValue(new Blob());
+      render(<Streamer pdfUrl="x.pdf" />);
+      await clickRevisedButton();
+      
+      // Open modal and select pages
+      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      fireEvent.click(screen.getAllByRole('checkbox')[0]);
+      fireEvent.click(screen.getByText('Download (1)'));
+  
+      await waitFor(() => {
+        expect(mockToBlob).toHaveBeenCalled();
+        const docInstance = (Document as jest.Mock).mock.instances[0];
+        expect(docInstance).toBeDefined();
+      });
+    });
+  
+    test('generates correct DOCX structure', async () => {
+      const mockToBlob = jest.spyOn(Packer, 'toBlob').mockResolvedValue(new Blob());
+      render(<Streamer pdfUrl="x.pdf" />);
+      await clickRevisedButton();
+  
+      // Select page 1
+      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      fireEvent.click(screen.getAllByRole('checkbox')[0]);
+      fireEvent.click(screen.getByText('Download (1)'));
+  
+      await waitFor(() => {
+        const docConfig = (Document as jest.Mock).mock.calls[0][0];
+        
+        // Verify document structure
+        expect(docConfig.sections?.length).toBe(1);
+        expect(docConfig.sections?.[0].children?.length).toBeGreaterThan(0);
+        
+        // Verify page 1 content
+        const paragraphs = docConfig.sections?.[0].children as Paragraph[];
+        expect(paragraphs[0]).toMatchObject({
+          text: 'Page 1 Content',
+          style: 'Heading1'
+        });
+      });
+    });
+  
+    test('disables download button when no pages selected', async () => {
+      render(<Streamer pdfUrl="x.pdf" />);
+      await clickRevisedButton();
+      
+      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      
+      const downloadButton = screen.getByText('Download (0)');
+      expect(downloadButton).toBeDisabled();
+    });
+  
+    test('closes modal after download', async () => {
+      jest.spyOn(Packer, 'toBlob').mockResolvedValue(new Blob());
+      render(<Streamer pdfUrl="x.pdf" />);
+      await clickRevisedButton();
+      
+      // Open and close modal
+      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      fireEvent.click(screen.getByText('Cancel'));
+      
+      expect(screen.queryByText('Select Pages to Download')).not.toBeInTheDocument();
+    });
+  
+    test('handles DOCX generation failure', async () => {
+      const mockToBlob = jest.spyOn(Packer, 'toBlob')
+        .mockRejectedValue(new Error('Generation failed'));
+      const mockToast = jest.requireMock('react-toastify').toast;
+  
+      render(<Streamer pdfUrl="x.pdf" />);
+      await clickRevisedButton();
+      
+      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      fireEvent.click(screen.getAllByRole('checkbox')[0]);
+      fireEvent.click(screen.getByText('Download (1)'));
+  
+      await waitFor(() => {
+        expect(mockToast.error).toHaveBeenCalledWith('Failed to generate document');
+      });
+    });
   });
 });
