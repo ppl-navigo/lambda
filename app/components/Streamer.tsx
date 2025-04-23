@@ -50,9 +50,13 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
           }
         }
       );
+    } catch (error) {
+      setRevisedText("No content loaded yet");
+      setLoading(false);
+      streamCtrl.current = null;
     } finally {
       setLoading(false);
-      streamCtrl.current = null;                 // finished
+      streamCtrl.current = null;
     }
   };
 
@@ -246,7 +250,7 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
 
   /* ---------- stop the stream whenever we rebuild text ---------- */
   useEffect(() => {
-    if (showEdited && !loading && !isEditing) {
+    if (showEdited && !isEditing) {
       // 1. cancel old stream
       streamCtrl.current?.abort();
       streamCtrl.current = null;
@@ -326,6 +330,7 @@ const Streamer: React.FC<StreamerProps> = ({ pdfUrl }) => {
                   onClick={() => setShowPageSelection(true)}
                   className="bg-green-600 hover:bg-green-700 text-white shadow-md p-2"
                   size="icon"
+                  data-testid="download-button"
                 >
                   <Download className="w-5 h-5" />
                 </Button>
