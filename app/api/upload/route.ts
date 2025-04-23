@@ -1,6 +1,19 @@
 import { v2 as cloudinary } from "cloudinary";
 import { v4 as uuidv4 } from "uuid";
 
+export async function OPTIONS() {
+  const res = new Response(null, {
+      status: 200,
+      headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Max-Age': '86400',
+      },
+  });
+  return res;
+}
+
 // Configure Cloudinary with environment variables
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -55,13 +68,25 @@ export async function POST(request: Request) {
     // Return the secure URL of the uploaded file
     return new Response(
       JSON.stringify({ url: result.secure_url }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      { status: 200, headers: 
+        { "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Max-Age': '86400',
+         } }
     );
   } catch (error) {
     console.error("Upload failed:", error);
     return new Response(
       JSON.stringify({ error: "Upload failed" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { 
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Max-Age': '86400', 
+      } }
     );
   }
 }

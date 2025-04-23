@@ -2,6 +2,19 @@ import { NextRequest } from "next/server";
 import { google } from "@ai-sdk/google";
 import { streamText } from "ai";
 
+export async function OPTIONS() {
+  const res = new Response(null, {
+      status: 200,
+      headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Max-Age': '86400',
+      },
+  });
+  return res;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Retrieve promptText from request body
@@ -39,6 +52,10 @@ export async function POST(req: NextRequest) {
         "Content-Type": "text/event-stream",  // Set proper content type for streaming
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Max-Age': '86400',
       },
     });
 
