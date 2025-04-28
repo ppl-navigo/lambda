@@ -12,21 +12,9 @@ function verifySignature(
     signatureKey: string,
 ): boolean {
     const serverKey = process.env.MIDTRANS_SERVER_KEY
-    console.log(
-        `verifying signature with orderId: ${orderId}, statusCode: ${statusCode}, grossAmount: ${grossAmount}, serverKey: ${serverKey}`
-    )
     if (!serverKey) {
         throw new Error("Server key is not defined")
     }
-    console.log(
-        `signatureKey: ${signatureKey}`
-    )
-    console.log(
-        `sha512(${orderId}${statusCode}${grossAmount}${serverKey})=`
-    )
-    console.log(
-        sha512(`${orderId}${statusCode}${grossAmount}${serverKey}`)
-    )
     return (
         sha512(`${orderId}${statusCode}${grossAmount}${serverKey}`) === signatureKey
     )
@@ -66,33 +54,10 @@ export async function POST(request: Request) {
         if (error) {
             return new Response(JSON.stringify({ error: error.message }), { status: 500 })
         }
-        // const { data: userBalance, error: userBalanceError } = await supabase
-        //     .from("balance")
-        //     .select("*")
-        //     .eq("user_email", body.email)
-        // if (userBalance && userBalance.length > 0) {
-        //     // increase balance
-        //     const { error: balanceError } = await supabase
-        //         .from("balance")
-        //         .update({
-        //             balance: userBalance[0].balance + body.gross_amount,
-        //         })
-        //         .eq("user_email", body.email)
-        //     if (balanceError) {
-        //         return new Response(JSON.stringify({ error: balanceError.message }), { status: 500 })
-        //     }
-        // }
-        // if (error || userBalanceError) {
-        //     return new Response(JSON.stringify({ error: error?.message ?? userBalanceError?.message }), { status: 500 })
-        // }
-        // if (!data || !userBalance) {
-        //     return new Response(JSON.stringify({ error: "Failed to insert payment" }), { status: 500 })
-        // }
         return new Response(JSON.stringify({
             message: "Payment success",
             data: {
                 ...(data?.[0] ? data[0] : {}),
-                // balance: userBalance[0].balance + body.gross_amount,
             },
         }), { status: 200 })
     }
