@@ -4,6 +4,8 @@ import { openai } from "@ai-sdk/openai";
 import { streamObject } from "ai";
 import { z } from 'zod';
 
+
+export const maxDuration = 60;
 // Array untuk menyimpan semua prompt sebelumnya
 const previousPrompts: string[] = [];
 
@@ -25,13 +27,13 @@ const legalDocumentSchema = z.object({
 
 export async function OPTIONS() {
   const res = new Response(null, {
-      status: 200,
-      headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-      },
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
   });
   return res;
 }
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
     if (promptText === previousPrompts[previousPrompts.length - 1]) {
       return new Response(JSON.stringify({ error: "Duplicate prompt" }), {
         status: 400,
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -61,40 +63,73 @@ export async function POST(req: NextRequest) {
     const context = previousPrompts.join("\n\n---\n\n");
 
     const res = await streamObject({
-      model: openai("gpt-4o-mini"),
+      model: openai("gpt-4o"),
       schema: legalDocumentSchema,
       system: `
-          # LEGAL DOCUMENT GENERATOR: MEMORANDUM OF UNDERSTANDING (MOU)
+      # LEGAL DOCUMENT GENERATOR: MEMORANDUM OF UNDERSTANDING (MOU)
 
-          ## TASK
-          Generate a professionally formatted Memorandum of Understanding (MOU) between two parties in Markdown format. Do not put any empty field where the user has not provided any information. Use the information provided by the user to create a legally sound document.
-          ## INSTRUCTIONS
-          1. Use formal legal Bahasa Indonesia. Unless specified, assume the user is a legal professional.
-          2. Create a formal MOU based on the information provided by the user.
-          3. Include all standard clauses required for a legally sound MOU, even if not explicitly requested.
-          4. Maintain professional legal language and formatting throughout the document.
-          5. Structure the document with clear sections with given context. For the section with no clear values, don't generate for that section.
+      ## PRIMARY OBJECTIVE
+      Your task is to generate a comprehensive, legally sound Memorandum of Understanding (MOU) between the parties specified by the user. This document must follow professional legal standards while adapting to the specific circumstances described in the prompt. The final output should be a complete, ready-to-sign document that addresses all legal considerations relevant to the agreement's purpose.
 
-          ## REQUIREMENTS
-          - Title must be on a single line with no line breaks (critical requirement).
-          - Title should clearly state and represent the goal of the document.
-          - Use factual information provided by the user whenever possible.
-          - Only fill in missing information when necessary, using standard legal conventions.
-          - Correct any typos or grammatical errors in the user's input.
-          - Ensure proper spacing and formatting throughout the document.
-          - Give sign section, with each parties names written under the sign area.
+      ## DETAILED INSTRUCTIONS
+      1. Employ formal legal Bahasa Indonesia throughout the document. Use precise terminology that would be appropriate in a court of law or formal business setting. Maintain this professional tone consistently, avoiding colloquialisms or informal expressions.
+      2. Analyze the information provided by the user carefully, identifying explicit requests as well as implicit needs. Create sections that comprehensively address the agreement's purpose, scope, responsibilities of each party, terms of cooperation, and other standard components of a formal MOU.
+      3. Include all standard legal clauses necessary for a binding MOU, even when not explicitly requested by the user. This includes but is not limited to: effective date provisions, termination conditions, confidentiality requirements, dispute resolution mechanisms, governing law stipulations, force majeure clauses, and amendment procedures.
+      4. Structure the document with clear, hierarchical sections using proper legal formatting conventions. Each section should be logically organized with appropriate headings and subheadings to enhance readability and legal precision.
+      5. Carefully evaluate the context to determine which sections are essential for this specific agreement. For any standard section where user information is insufficient, apply reasonable legal defaults based on common practice rather than leaving sections incomplete.
 
-          ## AVOID
-          - Do not invent elaborate fictional details.
-          - Do not include clauses that contradict provided information.
-          - Avoid ambiguous language that could create legal confusion.
-          - Avoid repetitive or redundant statements.
-          - Do not include disclaimers or unnecessary legal jargon.
-          - Do not put some empty field where the user has not provided any information. e.g. DO NOT MAKE IT LIKE THIS [Masukkan alamat], or [Tanggal Hari Ini]
+      ## CRITICAL REQUIREMENTS
+      - Format the title as a single continuous line without any line breaks or paragraph separations. This is absolutely essential for proper document processing.
+      - Craft a title that precisely captures the agreement's purpose, scope, and parties involved. The title should be specific enough to distinguish this agreement from others while remaining concise and professional.
+      - Incorporate all factual details provided by the user with utmost accuracy. Names, dates, locations, amounts, and other specific information must be presented exactly as provided, with corrections only for obvious typographical errors.
+      - When information is incomplete, apply standard legal conventions that offer maximum protection to both parties. Fill gaps judiciously with balanced terms that neither party would likely object to.
+      - Apply meticulous attention to grammatical accuracy, proper punctuation, and consistent formatting throughout the document. Legal documents require precision in language to prevent ambiguity or misinterpretation.
+      - Include a properly formatted signature section with adequate space for signatures, clear identification of signatories by name and position, and appropriate dating fields. Ensure the signature block aligns with the number of parties specified.
+      - Address potential loopholes by including comprehensive definitions, precise language about obligations, clear timelines, specific performance metrics, and detailed remedies for non-compliance.
 
-          ## FORMAT
-          Use proper Markdown formatting with appropriate headers, lists, and spacing.
-          Return a JSON object with the markdown content, document type, and parties involved.
+      ## ELEMENTS TO AVOID
+      - Do not fabricate specific details such as exact addresses, tax identification numbers, or specific amounts unless explicitly provided by the user. Avoid inventing any factual information.
+      - Never include clauses that contradict or undermine information provided by the user. Each provision should be consistent with the overall intent and purpose of the agreement as described.
+      - Eliminate ambiguous phrases, vague terminology, or open-ended statements that could create legal uncertainty. Each obligation and right should be clearly defined and measurable.
+      - Avoid redundancy and repetition of concepts across different sections. Each clause should serve a distinct purpose without unnecessary duplication of ideas or requirements.
+      - Exclude overly complex legal jargon when simpler language would suffice. While maintaining professional standards, prioritize clarity and comprehensibility.
+      - Never include placeholder text or bracketed instructions in the final document. Any field without specific user input should be completed with reasonable default text rather than leaving obvious gaps or placeholders like "[Masukkan alamat]" or "[Tanggal Hari Ini]".
+
+      ## FORMATTING GUIDELINES
+      Format the document using proper Markdown with:
+      - Clear hierarchical heading structure (# for main title, ## for major sections, ### for subsections)
+      - Appropriate line spacing between sections
+      - Numbered lists for sequential items or procedures
+      - Bullet points for non-sequential lists or options
+      - Bold text for defined terms or critical information
+      - Proper paragraph breaks for readability
+      - Consistent indentation for nested content
+
+      ## CHAIN OF THOUGHT REASONING
+      When creating the document, follow this reasoning process:
+      1. First, identify the core purpose of the agreement and the key parties involved
+      2. Next, determine which standard sections are essential based on this purpose
+      3. For each section, consider:
+          - What specific obligations does each party have?
+          - What timeframes or deadlines apply?
+          - What happens if obligations aren't met?
+          - What protections does each party need?
+      4. Review the completed document to ensure balanced protection for all parties
+      5. Verify that no critical legal elements are missing
+
+      ## MULTI-SHOT EXAMPLES
+
+      ### Example 1: Simple Collaboration MOU
+      **Input**: "Saya butuh MOU antara PT ABC Technology dan Universitas XYZ untuk program magang mahasiswa"
+      **Reasoning**: This requires sections on student selection, supervision responsibilities, intellectual property provisions, duration of internships, evaluation criteria, and termination conditions. Both parties need protection for their interests while ensuring student welfare.
+      **Output**: [Detailed MOU with proper title, parties section, program description, roles and responsibilities, IP clause, term and termination, signatures]
+
+      ### Example 2: Complex Business Partnership
+      **Input**: "MOU kerjasama distribusi produk antara PT Manufaktur Jaya dan CV Distributor Nasional dengan target pasar Jawa dan Bali"
+      **Reasoning**: This commercial agreement needs detailed sections on territory rights, exclusivity provisions, minimum purchase requirements, marketing responsibilities, product handling protocols, pricing structures, and dispute resolution. Consider adding performance metrics and review periods.
+      **Output**: [Comprehensive MOU with distribution terms, territorial rights, performance targets, termination for non-performance, confidentiality provisions, signatures]
+
+      Remember: The final document must be professional, comprehensive, legally sound, and address all possible contingencies relevant to the agreement's purpose.
       `,
       prompt: `
         [KONTEKS SEBELUMNYA]
@@ -115,7 +150,7 @@ export async function POST(req: NextRequest) {
     response.headers.set('Access-Control-Max-Age', '86400');
     return response;
 
-    
+
 
     // We'll use a TransformStream to push SSE data
     // const encoder = new TextEncoder();
@@ -151,7 +186,7 @@ export async function POST(req: NextRequest) {
     // });
   } catch (error) {
     console.error("Error in /api/legal-document:", error);
-    return new Response(JSON.stringify({ error: "Error generating legal document" }), { 
+    return new Response(JSON.stringify({ error: "Error generating legal document" }), {
       status: 500,
       headers: {
         "Content-Type": "application/json",
