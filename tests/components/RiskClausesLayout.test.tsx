@@ -34,6 +34,8 @@ const makeRisk = (id: string, sectionNumber = 1) => ({
 
 describe("RiskClausesLayout", () => {
   const baseProps = {
+    totalPages: 10,
+    isGenerating: false,
     risks: [],
     loading: false,
     processedPages: [],
@@ -79,22 +81,23 @@ describe("RiskClausesLayout", () => {
 
   it("renders grouped risks by sectionNumber and calls callbacks", () => {
     const risks = [
-      makeRisk("a", 1),
-      makeRisk("b", 1),
-      makeRisk("c", 2),
-    ];
-    const handleSelect = jest.fn();
-    const handleRevise = jest.fn();
-    const handleApply = jest.fn();
-    render(
-      <RiskClausesLayout
-        {...baseProps}
-        risks={risks}
-        handleSelectClause={handleSelect}
-        handleRevise={handleRevise}
-        handleApplySuggestion={handleApply}
-      />
-    );
+    makeRisk("a", 1),
+    makeRisk("b", 1),
+    makeRisk("c", 2),
+  ];
+  const handleSelect = jest.fn();
+  const handleRevise = jest.fn();
+  const handleApply = jest.fn();
+  render(
+    <RiskClausesLayout
+      {...baseProps}
+      risks={risks}
+      processedPages={[1, 2]} // Add processed pages here
+      handleSelectClause={handleSelect}
+      handleRevise={handleRevise}
+      handleApplySuggestion={handleApply}
+    />
+  );
     // 2 groups: Page 1 and Page 2
     expect(screen.getByText("Page 1")).toBeInTheDocument();
     expect(screen.getByText("Page 2")).toBeInTheDocument();
@@ -165,4 +168,6 @@ describe("RiskClausesLayout", () => {
     const button = screen.getByText(/Generating/i);
     expect(button).toBeDisabled();
   });
+
+  
 });

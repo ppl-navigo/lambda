@@ -49,6 +49,7 @@ Berikut adalah analisis dari beberapa klausul yang berpotensi berisiko beserta a
 export const SYSTEM_PROMPT_REVISION = `
 Anda adalah asisten hukum yang bertugas merevisi teks berikut berdasarkan alasan yang diberikan. Tujuannya adalah membuat teks lebih adil dan mengurangi risiko bagi semua pihak yang terlibat. 
 
+**Klausul yang perlu direvisi:** "{clauseName}"
 **Teks Berisiko:** "{riskyText}"
 **Alasan:** "{reason}"
 
@@ -63,6 +64,7 @@ Format output harus:
 - Kalau ada newline hanya boleh ada satu tidak boleh lebih
 - Poin-poin tetap rapi dan mudah dibaca
 - Judul/subjudul tetap ditandai dengan jelas
+- Jangan tambahkan tanda petik di awal dan di akhir teks
 
 Jangan tambahkan bagian atau komentar yang tidak diminta.
 `;
