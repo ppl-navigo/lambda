@@ -2,6 +2,8 @@ import React from "react";
 import { render, screen, waitFor, fireEvent, act, cleanup} from "@testing-library/react";
 import axios from "axios";
 import MarkdownViewer from "@/app/components/MarkdownViewer";
+import { useMouStore } from '@/app/store/useMouStore';
+import { toast } from 'react-toastify';
 
 jest.mock("p-limit", () => {
   return () => {
@@ -30,18 +32,14 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 function mockApiResponse() {
   jest.mock("@/app/utils/apiRequest", () => ({
-    apiRequest: jest.fn(async (prompt, text) => {
-      if (prompt.includes("Klausul judul2")) {
-        console.log("Mocked API request 1");
-        return `**Klausul 1:** "Risky Text" **Alasan:** "Some reason."`;
-      } else if (prompt.includes("rapi dan profesional")) {
-        console.log("Mocked API request 2");
-        return `Mocked organization result`;
-      } else if (prompt.includes("penyesuaian terhadap revisi")) {
-        console.log("Mocked API request 3");
-        return `📝 Suggested Revision: Revised text based on the clause`;  // Mock the actual response expected
+    apiRequest: jest.fn(async (prompt, text, errorMessage) => {
+      if (prompt.includes("Error analyzing text")) {
+        throw new Error("AI analysis error");
       }
-      return "";
+      if (prompt.includes("Error organizing text")) {
+        return "Organized Text";
+      }
+      return `**Klausul 1:** "Risky Text" **Alasan:** "Some reason."`;
     })
   }));
 }
@@ -102,6 +100,14 @@ describe("MarkdownViewer Component Tests (Fully Mocked)", () => {
     });
     mockFetchSuccess(`**Klausul 1:** "Risky Text" **Alasan:** "Some reason."`);
     mockApiResponse();
+    useMouStore.setState({
+      pagesContent: [],
+      riskyClauses: [],
+      updatePageContent: jest.fn(),
+      setRiskyClauses: jest.fn(),
+      updateRiskyClause: jest.fn(),
+      reset: jest.fn()
+    });
   });
   
   afterEach(() => {
@@ -253,4 +259,129 @@ describe("MarkdownViewer Component Tests (Fully Mocked)", () => {
       expect(screen.getByText(/Revisi/i)).toBeInTheDocument();
     });
   });
+
+  test("menangani error saat ekstraksi PDF gagal", async () => {
+    const fileUtils = require("@/app/utils/fileUtils");
+    fileUtils.fetchFileAndExtractText.mockRejectedValueOnce(
+      new Error("Error extracting text from backend.")
+    );
+  
+    await act(async () => {
+      render(<MarkdownViewer pdfUrl="http://error.pdf" />);
+    });
+  
+    await waitFor(() => {
+      expect(screen.getByText(/Error extracting text from backend./i)).toBeInTheDocument();
+    });
+  });
+
+  // test("menangani error analisis AI", async () => {
+  //   const { apiRequest } = require("@/app/utils/apiRequest");
+  //   apiRequest.mockRejectedValueOnce(new Error("AI analysis error"));
+  
+  //   await act(async () => {
+  //     render(<MarkdownViewer pdfUrl="https://error-analysis.pdf" />);
+  //   });
+  
+  //   await waitFor(() => {
+  //     expect(screen.getByText(
+  //       /❌ Gagal menganalisis dokumen, coba lagi nanti./i, // Sesuaikan pesan
+  //       { exact: false }
+  //     )).toBeInTheDocument();
+  //   });
+  // });
+
+  // test("menangani klausa tidak ditemukan saat apply revisi", async () => {
+  //   const invalidRisk = {
+  //     id: "invalid-123",
+  //     sectionNumber: 999,
+  //     title: "Invalid Clause",
+  //     originalClause: "Invalid clause",
+  //     reason: "Test reason",
+  //     revisedClause: "Revised invalid clause",
+  //     currentClause: "Invalid clause",
+  //     applied: false
+  //   };
+  
+  //   useMouStore.setState({ riskyClauses: [invalidRisk] });
+    
+  //   await act(async () => {
+  //     render(<MarkdownViewer pdfUrl="https://invalid-section.pdf" />);
+  //   });
+  
+  //   // Buka detail klausa
+  //   const expandButton = await screen.findByText(/Expand/i);
+  //   fireEvent.click(expandButton);
+  
+  //   const applyButton = await screen.findByText(/Apply Suggestion/i);
+  //   fireEvent.click(applyButton);
+  
+  //   await waitFor(() => {
+  //     expect(toast.error).toHaveBeenCalledWith(
+  //       "Gagal menerapkan revisi klausul!"
+  //     );
+  //   });
+  // });
+
+  // test("menangani concurrent revision requests", async () => {
+  //   const { apiRequest } = require("@/app/utils/apiRequest");
+  //   const mockResponses = [
+  //     Promise.resolve("Revision 1"),
+  //     Promise.resolve("Revision 2"),
+  //     Promise.resolve("Revision 3")
+  //   ];
+    
+  //   apiRequest.mockImplementation(() => mockResponses.shift());
+  
+  //   await act(async () => {
+  //     render(<MarkdownViewer pdfUrl="https://concurrent.pdf" />);
+  //   });
+  
+  //   const expandButtons = await screen.findAllByText(/Expand/i);
+  //   await act(async () => {
+  //     expandButtons.forEach(btn => fireEvent.click(btn));
+  //   });
+  
+  //   const checkboxes = await screen.findAllByRole("checkbox");
+  //   await act(async () => {
+  //     checkboxes.forEach(checkbox => fireEvent.click(checkbox));
+  //   });
+  
+  //   const reviseButtons = await screen.findAllByText(/Get Revision/i);
+  //   await act(async () => {
+  //     reviseButtons.forEach(btn => fireEvent.click(btn));
+  //   });
+  
+  //   await waitFor(() => {
+  //     expect(apiRequest).toHaveBeenCalledTimes(3);
+  //   });
+  // });  
+
+test("membersihkan timeout pada unmount", async () => {
+  const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
+  
+  const { unmount } = render(<MarkdownViewer pdfUrl="https://unmount-test.pdf" />);
+  unmount();
+  
+  expect(clearTimeoutSpy).toHaveBeenCalled();
+  clearTimeoutSpy.mockRestore();
+});
+
+test("menangani empty chat prompt", async () => {
+  await act(async () => {
+    render(<MarkdownViewer pdfUrl="https://empty-prompt.pdf" />);
+  });
+
+  const checkbox = await screen.findByRole("checkbox");
+  fireEvent.click(checkbox);
+
+  const reviseButton = screen.getByText(/Revise/i);
+  fireEvent.click(reviseButton);
+
+  await waitFor(() => {
+    expect(toast.error).toHaveBeenCalledWith(
+      "Instruksi revisi tidak boleh kosong"
+    );
+  });
+});
 });

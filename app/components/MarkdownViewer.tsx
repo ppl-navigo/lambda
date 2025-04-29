@@ -28,6 +28,9 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   const [chatPrompt, setChatPrompt] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [selectedRisks, setSelectedRisks] = useState<Set<string>>(new Set());  // Track selected risks
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [totalDocumentPages, setTotalDocumentPages] = useState(0);
+
 
   const downloadFileAndExtractText = useCallback(async (fileUrl: string) => {
     setError("");
@@ -58,6 +61,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
           reason: cleanText(match[3]),
           revisedClause: "",
           currentClause: cleanText(match[2]),
+          applied: false
         }));
         return extractedRisks;
       } catch (error) {
@@ -83,11 +87,13 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
     const processDocument = useCallback(async () => {
       if (!pdfUrl) return;
+      setIsGenerating(true);
       setLoading(true);
       setError("");
     
       try {
         const pages = await downloadFileAndExtractText(pdfUrl); // still sequential
+        setTotalDocumentPages(pages.length);
     
         const tasks = pages.map((rawPageText, idx) =>
           limit(async () => {
@@ -113,9 +119,10 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
         await Promise.all(tasks); // max 3 running simultaneously
       } catch (err) {
         console.error("❌ Gagal menganalisis dokumen:", err);
-        setError("Gagal menganalisis dokumen");
+        setError(err instanceof Error ? err.message : "Gagal memproses dokumen");
       } finally {
         setLoading(false);
+        setIsGenerating(false);
       }
     }, [pdfUrl, downloadFileAndExtractText]);
 
@@ -143,7 +150,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   const handleRevise = async (risk: RiskyClause) => {
     setLoadingStates((prev) => ({ ...prev, [risk.id]: true }));  // Set loading to true for this risk
     try {
-      const suggestion = await generateRevisionWithAI(risk.originalClause, risk.reason);
+      const suggestion = await generateRevisionWithAI(risk.title, risk.originalClause, risk.reason);
       
       useMouStore.getState().updateRiskyClause(risk.id, {
         revisedClause: suggestion,
@@ -151,7 +158,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
       setRisks((prev) =>
         prev.map((r) =>
-          r.id === risk.id ? { ...r, revisedClause: suggestion } : r
+          r.id === risk.id ? { ...r, revisedClause: suggestion, applied: false } : r,
         )
       );
 
@@ -165,6 +172,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   };
   
   const handleApplySuggestion = async (risk: RiskyClause) => {
+    if (risk.applied) return;
     try {
       const currentPagesContent = useMouStore.getState().pagesContent;
       const originalPageContent = currentPagesContent.find(
@@ -195,7 +203,11 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
       setRisks((prev) =>
         prev.map((r) =>
-          r.id === risk.id ? { ...r, currentClause: risk.revisedClause ?? "" } : r
+          r.id === risk.id ? { 
+            ...r, 
+            currentClause: risk.revisedClause ?? "",
+            applied: true
+          } : r
         )
       );
       toast.success("Revisi berhasil diterapkan!");
@@ -207,10 +219,11 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   };  
 
   const generateRevisionWithAI = useCallback(async (
+    clauseName: string,
     riskyText: string,
     reason: string
   ): Promise<string> => {
-    const systemPrompt = SYSTEM_PROMPT_REVISION.replace("{riskyText}", riskyText).replace("{reason}", reason);
+    const systemPrompt = SYSTEM_PROMPT_REVISION.replace("{clauseName}", clauseName).replace("{riskyText}", riskyText).replace("{reason}", reason);
     
     const suggestion = await apiRequest(systemPrompt, riskyText, "Error generating revision");
     return suggestion;
@@ -229,7 +242,10 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
   };
 
   const handleSendPrompt = async () => {
-    if (selectedRisks.size === 0) return; // If no clauses are selected
+    if (selectedRisks.size === 0 || !chatPrompt.trim()) { // Tambahkan validasi input kosong
+      toast.error("Instruksi revisi tidak boleh kosong");
+      return;
+    }
   
     setIsSending(true);
   
@@ -243,22 +259,27 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
           .replace("{riskyText}", selectedRisk.currentClause)
           .replace("{revisedClause}", selectedRisk.revisedClause ?? "")
           .replace("{chatPrompt}", chatPrompt || "");
-  
+    
         // 2. Request revision from LLM
         console.log("System Prompt:", systemPrompt);
         console.log("Current Clause:", selectedRisk.currentClause);
         const revisedClause = await apiRequest(systemPrompt, selectedRisk.currentClause, "Error generating revision");
         console.log("Revised Clause:", revisedClause);
-
+    
         // 3. Update the revisedClause in the local state (for immediate display)
         setRisks((prev) =>
           prev.map((risk) =>
-            risk.id === selectedRisk.id ? { ...risk, revisedClause } : risk
+            risk.id === selectedRisk.id ? { 
+              ...risk, 
+              revisedClause: revisedClause,
+              applied: false // Reset applied status karena revisi baru
+            } : risk
           )
         );
         
         useMouStore.getState().updateRiskyClause(selectedRisk.id, {
           revisedClause: revisedClause,
+          applied: false // Reset applied status di store
         });
       }
       toast.success("Revisi berhasil dikirimkan!");
@@ -273,6 +294,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
 
   return (
     <RiskClausesLayout
+      totalPages={totalDocumentPages}
       risks={risks}
       loading={loading}
       processedPages={processedPages}
@@ -285,6 +307,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = React.memo(({ pdfUrl }) =>
       chatPrompt={chatPrompt}
       setChatPrompt={setChatPrompt}
       isSending={isSending}
+      isGenerating={isGenerating}
       handleSendPrompt={handleSendPrompt}
     />
   );

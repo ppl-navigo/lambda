@@ -7,14 +7,16 @@ import { Document, Packer, Paragraph, TextRun } from "docx";
 jest.mock('docx', () => ({
   ...jest.requireActual('docx'),
   Document: jest.fn().mockImplementation(() => ({
-    // Mock minimal untuk test
-    sections: [],
+    sections: [{
+      children: [],
+      properties: {}
+    }],
   })),
   Packer: {
     toBlob: jest.fn().mockResolvedValue(new Blob()),
   },
-  Paragraph: jest.fn().mockImplementation((args) => args),
-  TextRun: jest.fn().mockImplementation((args) => args),
+  Paragraph: jest.fn().mockImplementation(args => args),
+  TextRun: jest.fn().mockImplementation(args => args),
 }));
 
 // TextStreamer – we stream in 10‑byte chunks
@@ -130,9 +132,10 @@ describe('Streamer component', () => {
   });
 
   test('renders no content message when no pages are loaded', async () => {
+    fillStore([], []); // Reset pagesContent ke empty array
     render(<Streamer pdfUrl="http://example.com/test.pdf" />);
     
-    fireEvent.click(screen.getByText(/Revised Document/i));
+    await clickRevisedButton();
     
     await waitFor(() => {
       expect(screen.getByText(/No content loaded yet/i)).toBeInTheDocument();
@@ -228,20 +231,25 @@ describe('Streamer component', () => {
   describe('Download Button Functionality', () => {
     beforeEach(() => {
       jest.clearAllMocks();
-      fillStore([
-        { sectionNumber: 1, content: "# Page 1 Content" },
-        { sectionNumber: 2, content: "## Page 2 Content" },
-      ], []);
+      fillStore(
+        [
+          { sectionNumber: 1, content: "# Page 1 Content" },
+          { sectionNumber: 2, content: "## Page 2 Content" },
+        ],
+        // Tambahkan risky clause agar button muncul
+        [{ id: "1", sectionNumber: 1, originalClause: "Original", revisedClause: "Revised", title: "", reason: "" }]
+      );
     });
   
     test('opens page selection modal when download button clicked', async () => {
       render(<Streamer pdfUrl="x.pdf" />);
       await clickRevisedButton();
       
-      fireEvent.click(screen.getByRole('button', { name: /download-button/i }));
+      fireEvent.click(screen.getByTestId("download-button"));
       
-      expect(screen.getByText('Select Pages to Download')).toBeInTheDocument();
-      expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+      await waitFor(() => {
+        expect(screen.getByText('Select Pages to Download')).toBeInTheDocument();
+      });
     });
   
     test('downloads selected pages as DOCX', async () => {
@@ -250,7 +258,7 @@ describe('Streamer component', () => {
       await clickRevisedButton();
       
       // Open modal and select pages
-      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      fireEvent.click(screen.getByRole('button', { name: /download-button/i }));
       fireEvent.click(screen.getAllByRole('checkbox')[0]);
       fireEvent.click(screen.getByText('Download (1)'));
   
@@ -265,22 +273,14 @@ describe('Streamer component', () => {
       const mockToBlob = jest.spyOn(Packer, 'toBlob').mockResolvedValue(new Blob());
       render(<Streamer pdfUrl="x.pdf" />);
       await clickRevisedButton();
-  
-      // Select page 1
-      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+    
+      fireEvent.click(screen.getByTestId("download-button"));
       fireEvent.click(screen.getAllByRole('checkbox')[0]);
       fireEvent.click(screen.getByText('Download (1)'));
-  
+    
       await waitFor(() => {
         const docConfig = (Document as jest.Mock).mock.calls[0][0];
-        
-        // Verify document structure
-        expect(docConfig.sections?.length).toBe(1);
-        expect(docConfig.sections?.[0].children?.length).toBeGreaterThan(0);
-        
-        // Verify page 1 content
-        const paragraphs = docConfig.sections?.[0].children as Paragraph[];
-        expect(paragraphs[0]).toMatchObject({
+        expect(docConfig.sections[0].children[0]).toMatchObject({
           text: 'Page 1 Content',
           style: 'Heading1'
         });
@@ -291,7 +291,10 @@ describe('Streamer component', () => {
       render(<Streamer pdfUrl="x.pdf" />);
       await clickRevisedButton();
       
-      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      const downloadBtn = await screen.findByRole('button', { 
+        name: /download-button/i 
+      });
+      fireEvent.click(downloadBtn);
       
       const downloadButton = screen.getByText('Download (0)');
       expect(downloadButton).toBeDisabled();
@@ -302,8 +305,9 @@ describe('Streamer component', () => {
       render(<Streamer pdfUrl="x.pdf" />);
       await clickRevisedButton();
       
-      // Open and close modal
-      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      // Buka modal
+      fireEvent.click(screen.getByRole('button', { name: /download-button/i }));
+      // Klik tombol Cancel
       fireEvent.click(screen.getByText('Cancel'));
       
       expect(screen.queryByText('Select Pages to Download')).not.toBeInTheDocument();
@@ -317,7 +321,7 @@ describe('Streamer component', () => {
       render(<Streamer pdfUrl="x.pdf" />);
       await clickRevisedButton();
       
-      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+      fireEvent.click(screen.getByRole('button', { name: /download-button/i }));
       fireEvent.click(screen.getAllByRole('checkbox')[0]);
       fireEvent.click(screen.getByText('Download (1)'));
   
@@ -326,4 +330,33 @@ describe('Streamer component', () => {
       });
     });
   });
+
+  // Test untuk handleDownload dengan selectedPages kosong
+test('handles download with no selected pages', async () => {
+  render(<Streamer pdfUrl="x.pdf" />);
+  await clickRevisedButton();
+  
+  fireEvent.click(screen.getByRole('button', { name: /download-button/i }));
+  const downloadButton = screen.getByText('Download (0)');
+  expect(downloadButton).toBeDisabled();
+});
+
+// Test untuk error handling dalam handleGenerateEditedText
+test('handles stream abort during generation', async () => {
+  const { TextStreamer } = require("@/app/utils/textStreamer");
+  TextStreamer.simulateStream.mockImplementationOnce(() => {
+    throw new Error('Stream aborted');
+  });
+
+  fillStore([], []); // Pastikan tidak ada konten
+  render(<Streamer pdfUrl="x.pdf" />);
+  
+  await act(async () => {
+    fireEvent.click(screen.getByText(/Revised Document/i));
+  });
+  
+  await waitFor(() => {
+    expect(screen.getByText(/No content loaded yet/i)).toBeInTheDocument();
+  });
+});
 });

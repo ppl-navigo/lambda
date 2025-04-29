@@ -76,13 +76,18 @@ const RiskItem: React.FC<RiskItemProps> = ({
 
             {risk.revisedClause && (
               <button
-                className="mt-2 bg-green-600 px-2 py-1 text-white rounded"
+                className={`mt-2 ${
+                  risk.applied 
+                    ? 'bg-gray-500 cursor-not-allowed' 
+                    : 'bg-green-600 hover:bg-green-700'
+                } px-2 py-1 text-white rounded`}
+                disabled={risk.applied}
                 onClick={(e) => {
                   e.stopPropagation();
                   onApply(risk);
                 }}
               >
-                Apply Suggestion
+                {risk.applied ? "Applied" : "Apply Suggestion"}
               </button>
             )}
           </div>

@@ -18,6 +18,8 @@ interface RiskClausesLayoutProps {
   setChatPrompt: (prompt: string) => void;
   isSending: boolean;
   handleSendPrompt: () => void;
+  isGenerating: boolean; // Tambahkan prop ini
+  totalPages: number;
 }
 
 const RiskClausesLayout: React.FC<RiskClausesLayoutProps> = ({
@@ -33,49 +35,79 @@ const RiskClausesLayout: React.FC<RiskClausesLayoutProps> = ({
   chatPrompt,
   setChatPrompt,
   isSending,
-  handleSendPrompt
+  handleSendPrompt,
+  isGenerating,
+  totalPages
 }) => (
   <div className="h-screen flex flex-col relative">
     <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} />
 
     {/* Main Content Area with scroll */}
     <div className="bg-[#1A1A1A] text-white p-4 rounded-md flex-1 overflow-y-auto">
-      {loading && processedPages.length === 0 && (
+    
+      {/* Indikator Global Generate */}
+      {isGenerating && (
+        <div className="text-yellow-500 mb-4 flex items-center gap-2">
+          ⏳ Memproses dokumen... 
+          <span className="bg-gray-700 px-2 py-1 rounded">
+            {processedPages.length}/{totalPages} halaman selesai diproses. Harap menunggu hingga selesai
+          </span>
+        </div>
+      )}
+
+      {/* Spinner untuk operasi lain */}
+      {loading && !isGenerating && processedPages.length === 0 && (
         <div className="flex justify-center items-center h-full">
           <FaSpinner data-testid="spinner" className="text-4xl animate-spin" />
         </div>
       )}
 
+      {/* Pesan error */}
       {error && <p className="text-red-500 text-center">{error}</p>}
 
-      {!loading && !error && risks.length === 0 && (
+      {/* Pesan "No risk" hanya setelah generate selesai */}
+      {!loading && !error && risks.length === 0 && !isGenerating && (
         <p className="text-gray-400 text-center">No risks found.</p>
       )}
 
+      {/* Rendering per halaman */}
       {Object.entries(
         risks.reduce((acc, risk) => {
           acc[risk.sectionNumber] = acc[risk.sectionNumber] || [];
           acc[risk.sectionNumber].push(risk);
           return acc;
         }, {} as Record<number, RiskyClause[]>)
-      ).map(([sectionNumber, group]) => (
-        <div key={sectionNumber} className="mb-6">
-          <h2 className="text-base font-bold mb-2 text-blue-300">
-            Page {sectionNumber}
-          </h2>
-          {group.map((risk) => (
-            <RiskItem
-              key={risk.id}
-              risk={risk}
-              isSelected={selectedRisks.has(risk.id)}
-              onSelect={handleSelectClause}
-              onRevise={handleRevise}
-              onApply={handleApplySuggestion}
-              isLoading={loadingStates[risk.id] || false}
-            />
-          ))}
-        </div>
-      ))}
+      ).map(([sectionNumberStr, group]) => {
+        const sectionNumber = parseInt(sectionNumberStr);
+        
+        return (
+          <div key={sectionNumber} className="mb-6">
+            <h2 className="text-base font-bold mb-2 text-blue-300">
+              Page {sectionNumber}
+            </h2>
+            
+            {/* Status halaman */}
+            {processedPages.includes(sectionNumber) ? (
+              group.map((risk) => (
+                <RiskItem
+                  key={risk.id}
+                  risk={risk}
+                  isSelected={selectedRisks.has(risk.id)}
+                  onSelect={handleSelectClause}
+                  onRevise={handleRevise}
+                  onApply={handleApplySuggestion}
+                  isLoading={loadingStates[risk.id] || false}
+                />
+              ))
+            ) : (
+              <div className="text-blue-500 animate-pulse flex items-center gap-2">
+                <span className="bg-blue-900 px-2 py-1 rounded">⏳</span>
+                Memproses halaman {sectionNumber}...
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
 
     {/* Floating Chatbar */}

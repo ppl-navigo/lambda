@@ -18,6 +18,7 @@ export interface RiskyClause {
   reason: string;
   revisedClause?: string;
   currentClause: string;
+  applied: boolean;
 }
 
 interface MouStore {
