@@ -7,7 +7,7 @@ export const fetchFileAndExtractText = async (fileUrl: string, apiUrl: string, e
     // Step 1: Download the file
     const fileResponse = await axios.get(fileUrl, { responseType: "blob" });
     const fileBlob = fileResponse.data;
-    const fileName = fileUrl.split("/").pop() || "unknown-file";
+    const fileName = fileUrl.split("/").pop() ?? "unknown-file";
     const fileType = fileResponse.headers["content-type"];
     const file = new File([fileBlob], fileName, { type: fileType });
 

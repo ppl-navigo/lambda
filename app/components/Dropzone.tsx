@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { FileRejection, useDropzone } from "react-dropzone";
 import { FiUpload, FiX } from "react-icons/fi";
 
@@ -13,6 +13,15 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string>("");
+
+  const controllerRef = useRef<AbortController | null>(null);
+
+  /* helper: abort previous and create a fresh one */
+  const freshController = () => {
+    controllerRef.current?.abort();              // cancel previous run
+    controllerRef.current = new AbortController();
+    return controllerRef.current;
+  };
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
@@ -62,35 +71,43 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
 
   const handleUpload = async () => {
     if (!selectedFile) return;
+
+    const controller = freshController();
     setIsUploading(true);
   
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
   
-      const response = await fetch("/api/upload", {
+      const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
   
-      const data = await response.json();
-      if (data.url) {
-        setPdfUrl(data.url); // The uploaded PDF's URL
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setPdfUrl(data.url);
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        console.log("⏹️ Upload cancelled");
       } else {
-        throw new Error("Upload failed");
+        console.error("Upload failed:", err);
+        setFileError("Upload failed");
       }
-    } catch (error) {
-      console.error("Upload failed:", error);
     } finally {
       setIsUploading(false);
     }
-  };  
-  
+  };
 
   const handleDeleteFile = () => {
+    controllerRef.current?.abort();
     setSelectedFile(null);
     setFileError("");
+    setIsUploading(false);
   };
+
+  useEffect(() => () => controllerRef.current?.abort(), []);
 
   return (
     <div className="flex flex-col items-center w-full p-4">
@@ -104,7 +121,9 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
         {selectedFile && (
           <button
             onClick={handleDeleteFile}
-            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+            className={`absolute top-2 right-2 rounded-full p-1 
+              ${isUploading ? "bg-yellow-500" : "bg-red-500"} text-white
+              hover:bg-red-600 disabled:opacity-50`}
             aria-label="close"
           >
             <FiX className="text-lg" />
@@ -142,6 +161,8 @@ const Dropzone: React.FC<DropzoneProps> = ({ setPdfUrl, isSidebarVisible }) => {
           {isUploading ? "Uploading..." : "Upload"}
         </button>
       )}
+
+      
     </div>
   );
 };
