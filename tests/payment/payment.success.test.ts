@@ -1,4 +1,4 @@
-import { POST } from '@/app/api/payment/success/route';
+import { POST } from '@/app/api/payment/webhook/route';
 import { supabase } from '@/utils/supabase';
 import { createHash } from 'node:crypto';
 
