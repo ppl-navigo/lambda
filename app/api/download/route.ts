@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
 ) {
   try {
-    const { filename } = params;
+    const url = new URL(request.url)
+    const filename = url.searchParams.get("filename")
 
     if (!filename) {
       return NextResponse.json({ error: 'Filename is required' }, { status: 400 });
@@ -17,7 +17,7 @@ export async function GET(
     }
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const url = `https://res.cloudinary.com/${cloudName}/raw/upload/${filename}`;
+    const imgUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${filename}`;
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (error) {
