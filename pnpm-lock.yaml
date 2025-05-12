@@ -54,7 +54,7 @@ importers:
         specifier: ^10.16.16
         version: 10.18.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       jspdf:
-        specifier: ^2.5.2
+        specifier: ^2.5.1
         version: 2.5.2
       jwt-decode:
         specifier: ^4.0.0
@@ -84,7 +84,7 @@ importers:
         specifier: ^3.6.20
         version: 3.6.20
       zod:
-        specifier: ^3.24.3
+        specifier: ^3.22.4
         version: 3.24.3
     devDependencies:
       '@babel/core':
