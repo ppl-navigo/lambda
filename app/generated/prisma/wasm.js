@@ -150,15 +150,6 @@ exports.Prisma.BalanceScalarFieldEnum = {
   updated_at: 'updated_at'
 };
 
-exports.Prisma.LimitScalarFieldEnum = {
-  limit_id: 'limit_id',
-  user_id: 'user_id',
-  generate_limit: 'generate_limit',
-  analyze_limit: 'analyze_limit',
-  chat_limit: 'chat_limit',
-  chat_last_used_at: 'chat_last_used_at'
-};
-
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -179,17 +170,11 @@ exports.Prisma.JsonNullValueFilter = {
   AnyNull: Prisma.AnyNull
 };
 
-exports.Prisma.NullsOrder = {
-  first: 'first',
-  last: 'last'
-};
-
 
 exports.Prisma.ModelName = {
   Order: 'Order',
   Payment: 'Payment',
-  Balance: 'Balance',
-  Limit: 'Limit'
+  Balance: 'Balance'
 };
 
 /**
