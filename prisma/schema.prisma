@@ -11,9 +11,15 @@ datasource db {
 model Order {
   order_id     String    @id
   user_id      String
+<<<<<<< HEAD
   payments     Payment[]
   amount       Float
   payment_link String
+=======
+  amount       Float
+  payment_link String
+  payments     Payment[]
+>>>>>>> 777cccd03d725fcf861254b634d0d0e6a255d3b2
 
   @@map("orders")
 }
@@ -27,11 +33,18 @@ model Payment {
   transaction_status String
   order_id           String
   signature_key      String
+<<<<<<< HEAD
   order              Order    @relation(fields: [orderOrder_id], references: [order_id])
+=======
+>>>>>>> 777cccd03d725fcf861254b634d0d0e6a255d3b2
   gross_amount       Float
   payment_type       String
   orderOrder_id      String
   metadata           Json     @default("{}")
+<<<<<<< HEAD
+=======
+  order              Order    @relation(fields: [orderOrder_id], references: [order_id])
+>>>>>>> 777cccd03d725fcf861254b634d0d0e6a255d3b2
 
   @@map("payments")
 }
@@ -39,12 +52,17 @@ model Payment {
 model Balance {
   balance_id String   @id @default(uuid())
   user_id    String   @unique
+<<<<<<< HEAD
   amount     Float    @default(0)
+=======
+  amount     Float    @default(250000.0)
+>>>>>>> 777cccd03d725fcf861254b634d0d0e6a255d3b2
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   @@map("balances")
 }
+<<<<<<< HEAD
 
 model Limit {
   limit_id       String @id @default(uuid())
@@ -57,3 +75,5 @@ model Limit {
 
   @@map("limits")
 }
+=======
+>>>>>>> 777cccd03d725fcf861254b634d0d0e6a255d3b2

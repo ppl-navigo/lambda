@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
             schema: legalDocumentPageSchema,
             system: SYSTEM_PROMPT,
             prompt: promptContext,
-            temperature: 0.3,
+            temperature: 0.5,
             schemaDescription: "Generate a legal document in Indonesian language with rich markdown formatting and structured numbered lists.",
         });
 

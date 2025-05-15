@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
 import { jwtDecode } from "jwt-decode";
 import prisma from "@/utils/prisma";
-import { checkOrCreateBalanceAndLimit } from "@/utils/checkOrCreateBalanceAndLimit";
+import { checkOrCreateBalance } from "@/utils/checkOrCreateBalance";
 
 export async function OPTIONS() {
     const response = NextResponse.json({ status: 200 })
     response.headers.set("Access-Control-Allow-Origin", "*")
     response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS")
-    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, authorization")
     return response
 }
 
@@ -24,7 +24,6 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: "Invalid JWT Token!" }, { status: 401 })
     }
 
-    // try {
     await prisma.$connect()
     const orders = await prisma.order.findMany({
         where: {
@@ -35,13 +34,17 @@ export async function GET(request: Request) {
         }
     })
 
-    const { balance, limit } = await checkOrCreateBalanceAndLimit(sub)
-    return NextResponse.json({
+    const balance = await checkOrCreateBalance(sub)
+    const response = NextResponse.json({
         status: 200,
         data: {
-            limit,
             balance,
             orders
         }
-    })
+    });
+
+    response.headers.set("Access-Control-Allow-Origin", "*")
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, xyz")
+
+    return response
 }
