@@ -1,4 +1,4 @@
-name: Create vercel preview URL on pull request
+name: Deploy to vercel on merge to staging
 on:
   pull_request:
     branches:
@@ -6,10 +6,9 @@ on:
 
 jobs:
   build_and_deploy:
+    name: Build and analyze
     runs-on: ubuntu-latest
-    env:
-      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+    
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,13 +17,10 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      - uses: amondnet/vercel-action@v20
-        id: vercel-deploy
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          github-token: ${{ secrets.GH_TOKEN }}
-          vercel-org-id: ${{ secrets.ORG_ID }}
-          vercel-project-id: ${{ secrets.PROJECT_ID }}
-      - name: preview-url
-        run: |
-          echo ${{ steps.vercel-deploy.outputs.preview-url }}
+      # - uses: amondnet/vercel-action@v20
+      #   with:
+      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
+      #     github-token: ${{ secrets.GH_TOKEN }}
+      #     vercel-args: '--prod'
+      #     vercel-org-id: ${{ secrets.ORG_ID_STAGING}}
+      #     vercel-project-id: ${{ secrets.PROJECT_ID_STAGING}}

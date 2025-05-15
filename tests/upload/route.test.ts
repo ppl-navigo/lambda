@@ -4,6 +4,63 @@
 import { POST } from "@/app/api/upload/route";
 import { NextRequest } from "next/server";
 
+// Mock browser APIs for Node environment
+global.Blob = class Blob {
+  size: number;
+  type: string;
+
+  constructor(bits: BlobPart[], options: BlobPropertyBag = {}) {
+    this.type = options.type || '';
+    this.size = bits.reduce((acc, part) =>
+      acc + (typeof part === 'string' ? part.length : 'byteLength' in part ? part.byteLength : 'size' in part ? part.size : 0), 0);
+  }
+
+  arrayBuffer() { return Promise.resolve(new ArrayBuffer(0)); }
+  slice() { return new Blob([]); }
+  text() { return Promise.resolve(''); }
+  stream() { return {} as any; }
+} as any;
+
+global.File = class MockFile extends global.Blob {
+  name: string;
+  lastModified: number;
+
+  constructor(bits: BlobPart[], name: string, options: FilePropertyBag = {}) {
+    super(bits, options);
+    this.name = name;
+    this.lastModified = options.lastModified || Date.now();
+  }
+} as any;
+
+global.FormData = class FormData {
+  private data = new Map();
+
+  append(name: string, value: string | Blob, fileName?: string) {
+    this.data.set(name, value);
+  }
+
+  get(name: string) {
+    return this.data.get(name);
+  }
+
+  getAll(name: string) {
+    const value = this.data.get(name);
+    return value ? [value] : [];
+  }
+
+  has(name: string) {
+    return this.data.has(name);
+  }
+
+  delete(name: string) {
+    this.data.delete(name);
+  }
+
+  set(name: string, value: string | Blob, fileName?: string) {
+    this.data.set(name, value);
+  }
+} as any;
+
 // Mock Cloudinary with default successful upload
 jest.mock("cloudinary", () => ({
   v2: {
@@ -34,7 +91,10 @@ jest.mock("next/server", () => ({
     }
 
     async formData() {
-      if (this.body instanceof FormData) return this.body;
+      // Simple implementation that just returns the body if it's FormData
+      if (this.body instanceof FormData) {
+        return this.body;
+      }
       throw new Error("FormData error");
     }
   },
@@ -52,7 +112,7 @@ describe("POST /api/upload (Route Handler)", () => {
   });
 
   it("successfully uploads file", async () => {
-    const file = new File(["test"], "test.txt");
+    const file = new File(["test"], "test.txt", { type: "text/plain" });
     const formData = new FormData();
     formData.append("file", file);
 
@@ -88,7 +148,7 @@ describe("POST /api/upload (Route Handler)", () => {
       })
     }));
 
-    const file = new File(["test"], "test.txt");
+    const file = new File(["test"], "test.txt", { type: "text/plain" });
     const formData = new FormData();
     formData.append("file", file);
 
