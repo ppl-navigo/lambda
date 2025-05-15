@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
-import { google } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
-import { generateText, streamObject, streamText } from "ai";
+import { generateText, streamObject } from "ai";
 import { z } from 'zod';
 
 export const maxDuration = 60;
@@ -310,8 +309,8 @@ export async function POST(req: NextRequest) {
       Format the document using proper Markdown with a clear hierarchical structure. Use a single # for the main title, ## for major sections, and ### for subsections. Present content in comprehensive, well-structured paragraphs that fully explore each topic rather than relying on bullet points. When sequential processes must be described, use numbered paragraphs with complete sentences that flow logically. For defined terms, use bold text to highlight the term when first introduced, followed by a complete definition in paragraph form. Maintain consistent paragraph structure throughout the document, ensuring each paragraph addresses a single concept with appropriate depth and detail. Use judicious line spacing between sections to enhance readability without excessive whitespace. Format complex provisions as complete paragraphs rather than lists whenever possible to ensure comprehensive treatment.
       `,
       prompt: `
-        [KONTEKS SEBELUMNYA]
-        ${context}
+                [KONTEKS SEBELUMNYA]
+                ${context}
 
         [PROMPT TERBARU]
         ${promptText}
