@@ -8678,6 +8678,7 @@ snapshots:
       fs: 0.0.1-security
       highlight.js: 11.11.1
       input: 1.0.1
+      jspdf: 3.0.1
       jwt-decode: 4.0.0
       localforage: 1.10.0
       lucide-react: 0.479.0(react@18.3.1)
