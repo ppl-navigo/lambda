@@ -4,13 +4,60 @@ import { streamObject } from "ai";
 import { google } from "@ai-sdk/google";
 import { legalDocumentPageSchema } from "@/utils/legalDocumentPageSchema";
 import { SYSTEM_PROMPT } from "@/utils/prompts/generateDoc";
+import { checkBalanceThenDeduct } from "@/utils/checkBalanceThenDeduct";
+import { supabase } from "@/utils/supabase";
 
 export const maxDuration = 60;
 // Define the schema for a single page of the legal document
 
 export async function POST(req: NextRequest) {
+    const { promptText, previousState, init, accessToken, refreshToken } = await req.json();
+    if (!accessToken || !refreshToken) {
+        return new Response(
+            JSON.stringify({ error: "Missing access/refresh token" }),
+            {
+                status: 401,
+                headers: { "Content-Type": "application/json" },
+            }
+        );
+    }
+    const { data: sessionData } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+    });
+    if (!sessionData.session || !sessionData.session.user) {
+        return new Response(
+            JSON.stringify({ error: "Invalid session" }),
+            {
+                status: 401,
+                headers: { "Content-Type": "application/json" },
+            }
+        );
+    }
     try {
-        const { promptText, previousState } = await req.json();
+        if (init) {
+            await checkBalanceThenDeduct(
+                sessionData.session.user.id,
+                20000,
+            );
+        }
+    } catch (error) {
+        console.error("Balance check failed:", error);
+        return new Response(
+            JSON.stringify({ error: "Insufficient balance" }),
+            {
+                status: 402,
+                headers: {
+                    "Content-Type": "application/json",
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Access-Control-Max-Age': '86400',
+                }
+            }
+        );
+    }
+    try {
 
         // Extract data from prompt for initial generation
         // Structured state management for document generation

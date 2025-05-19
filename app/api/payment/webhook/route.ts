@@ -2,7 +2,7 @@ import prisma from '@/utils/prisma'
 import { supabase } from '@/utils/supabase'
 import { createHash } from 'node:crypto'
 
-function sha512(content: string) {
+export function sha512(content: string) {
     return createHash('sha512').update(content).digest('hex')
 }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { jwtDecode } from "jwt-decode";
 import prisma from "@/utils/prisma";
 import { checkOrCreateBalance } from "@/utils/checkOrCreateBalance";
+import { supabase } from "@/utils/supabase";
 
 export async function OPTIONS() {
     const response = NextResponse.json({ status: 200 })
@@ -11,30 +11,36 @@ export async function OPTIONS() {
     return response
 }
 
-export async function GET(request: Request) {
-    const headers = request.headers
-    const jwt = headers.get("Authorization")?.split(" ")[1]
+interface PaymentPayload {
+    access_token?: string;
+    refresh_token?: string;
+}
 
-    if (!jwt) {
-        return NextResponse.json({ error: "Missing JWT Token!" }, { status: 401 })
+export async function POST(request: Request) {
+    const body = await request.json() as PaymentPayload;
+    if (!body.refresh_token || !body.access_token) {
+        return NextResponse.json({ error: "Missing access/refresh token" }, { status: 401 });
     }
 
-    const { sub } = jwtDecode(jwt)
-    if (!sub) {
-        return NextResponse.json({ error: "Invalid JWT Token!" }, { status: 401 })
+    const { data: sessionData } = await supabase.auth.setSession({
+        access_token: body.access_token,
+        refresh_token: body.refresh_token,
+    })
+    if (!sessionData.session || !sessionData.session.user) {
+        return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
 
     await prisma.$connect()
     const orders = await prisma.order.findMany({
         where: {
-            user_id: sub
+            user_id: sessionData.session.user.id,
         },
         include: {
             payments: true
         }
     })
 
-    const balance = await checkOrCreateBalance(sub)
+    const balance = await checkOrCreateBalance(sessionData.session.user.id)
     const response = NextResponse.json({
         status: 200,
         data: {

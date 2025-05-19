@@ -1,15 +1,18 @@
+import { checkBalanceThenDeduct } from "@/utils/checkBalanceThenDeduct";
+import { supabase } from "@/utils/supabase";
 import { v2 as cloudinary } from "cloudinary";
+import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
 export async function OPTIONS() {
   const res = new Response(null, {
-      status: 200,
-      headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-      },
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
   });
   return res;
 }
@@ -27,7 +30,51 @@ interface CloudinaryUploadResult {
 }
 
 export async function POST(request: Request) {
+  const headers = request.headers;
+  const accessToken = headers.get("Authorization")?.split(" ")[1];
+  const refreshToken = headers.get("X-Refresh-Token");
+  if (!accessToken || !refreshToken) {
+    return NextResponse.json(
+      { error: "Missing access/refresh token" },
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const { data: sessionData } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  if (!sessionData.session || !sessionData.session.user) {
+    return NextResponse.json(
+      { error: "Invalid session" },
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   try {
+    console.log("User ID:", sessionData.session.user.id);
+    await checkBalanceThenDeduct(
+      sessionData.session.user.id,
+      30000,
+    )
+  } catch (error) {
+    console.error("Balance check failed:", error);
+    return new Response(
+      JSON.stringify({ error: "Insufficient balance" }),
+      {
+        status: 402, headers: {
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Max-Age': '86400',
+        }
+      }
+    );
+  }
+
+  try {
+
     // Parse the incoming request to extract the file
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -68,25 +115,30 @@ export async function POST(request: Request) {
     // Return the secure URL of the uploaded file
     return new Response(
       JSON.stringify({ url: result.secure_url }),
-      { status: 200, headers: 
-        { "Content-Type": "application/json",
+      {
+        status: 200, headers:
+        {
+          "Content-Type": "application/json",
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
           'Access-Control-Max-Age': '86400',
-         } }
+        }
+      }
     );
   } catch (error) {
     console.error("Upload failed:", error);
     return new Response(
       JSON.stringify({ error: "Upload failed" }),
-      { status: 500, headers: { 
-        "Content-Type": "application/json",
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Max-Age': '86400', 
-      } }
+      {
+        status: 500, headers: {
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Max-Age': '86400',
+        }
+      }
     );
   }
 }
