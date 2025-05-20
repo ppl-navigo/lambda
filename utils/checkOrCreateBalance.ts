@@ -1,4 +1,4 @@
-import { sha512 } from "@/app/api/payment/webhook/route"
+import { sha512 } from "@/utils/sha512"
 import prisma from "./prisma"
 
 export async function checkOrCreateBalance(userId: string) {

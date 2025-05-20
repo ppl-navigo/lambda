@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 // import { openai } from "@ai-sdk/openai";
 import { streamObject } from "ai";
 import { google } from "@ai-sdk/google";
@@ -9,6 +9,13 @@ import { supabase } from "@/utils/supabase";
 
 export const maxDuration = 60;
 // Define the schema for a single page of the legal document
+export async function OPTIONS() {
+    const response = NextResponse.json({ status: 200 })
+    response.headers.set("Access-Control-Allow-Origin", "*")
+    response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS")
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, authorization, X-Refresh-Token")
+    return response
+}
 
 export async function POST(req: NextRequest) {
     const { promptText, previousState, init, accessToken, refreshToken } = await req.json();
@@ -51,7 +58,7 @@ export async function POST(req: NextRequest) {
                     "Content-Type": "application/json",
                     'Access-Control-Allow-Origin': '*',
                     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Access-Control-Allow-Headers': 'Content-Type, authorization, X-Refresh-Token',
                     'Access-Control-Max-Age': '86400',
                 }
             }

@@ -5,18 +5,12 @@ import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
 export async function OPTIONS() {
-  const res = new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Max-Age': '86400',
-    },
-  });
-  return res;
+  const response = NextResponse.json({ status: 200 })
+  response.headers.set("Access-Control-Allow-Origin", "*")
+  response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS")
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, authorization, X-Refresh-Token")
+  return response
 }
-
 // Configure Cloudinary with environment variables
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,

@@ -1,10 +1,5 @@
 import prisma from '@/utils/prisma'
-import { supabase } from '@/utils/supabase'
-import { createHash } from 'node:crypto'
-
-export function sha512(content: string) {
-    return createHash('sha512').update(content).digest('hex')
-}
+import { sha512 } from '@/utils/sha512'
 
 function verifySignature(
     orderId: string,

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Gross amount must be greater than 0" }, { status: 400 });
     }
     const orderId = randomUUID().toString()
-    const res = await axios.post("https://app.sandbox.midtrans.com/snap/v1/transactions", {
+    const res = await axios.post(process.env.MIDTRANS_API_URL!, {
         transaction_details: {
             order_id: orderId,
             gross_amount: body.gross_amount,
