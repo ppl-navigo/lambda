@@ -3,6 +3,7 @@ import { supabase } from "@/utils/supabase";
 import { v2 as cloudinary } from "cloudinary";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import { Readable } from "stream";
 
 export async function OPTIONS() {
   const response = NextResponse.json({ status: 200 })
@@ -18,9 +19,30 @@ cloudinary.config({
   api_secret: process.env.NEXT_PUBLIC_CLOUDINARY_API_SECRET,
 });
 
-// Define the type for the Cloudinary upload result
+// Tipe untuk hasil upload dari Cloudinary
 interface CloudinaryUploadResult {
   secure_url: string;
+}
+
+// Fungsi untuk mengonversi web ReadableStream ke Node Readable stream
+function webStreamToNodeStream(webStream: ReadableStream<Uint8Array>): Readable {
+  const reader = webStream.getReader();
+  return new Readable({
+    read() {
+      reader
+        .read()
+        .then(({ done, value }) => {
+          if (done) {
+            this.push(null);
+            return;
+          }
+          this.push(value);
+        })
+        .catch(err => {
+          this.destroy(err);
+        });
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -81,15 +103,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Convert the file to a buffer
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-    // Generate unique ID for filename
+    // Generate unique ID untuk nama file
     const uniqueId = uuidv4();
 
-    // Upload the file to Cloudinary
+    // Manfaatkan adapter untuk mengonversi web stream ke Node stream
+    const fileStream = webStreamToNodeStream(file.stream());
+
     const result = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
+      const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type: "auto",
           folder: "uploads",
@@ -103,21 +124,22 @@ export async function POST(request: Request) {
             resolve(result as CloudinaryUploadResult);
           }
         }
-      ).end(fileBuffer);
+      );
+      fileStream.pipe(uploadStream);
     });
 
-    // Return the secure URL of the uploaded file
+    // Kembalikan secure URL dari file yang diunggah
     return new Response(
       JSON.stringify({ url: result.secure_url }),
       {
-        status: 200, headers:
-        {
+        status: 200,
+        headers: {
           "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-        }
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Max-Age": "86400",
+        },
       }
     );
   } catch (error) {
@@ -125,13 +147,14 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({ error: "Upload failed" }),
       {
-        status: 500, headers: {
+        status: 500,
+        headers: {
           "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-        }
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Max-Age": "86400",
+        },
       }
     );
   }
