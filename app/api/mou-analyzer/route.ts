@@ -4,13 +4,13 @@ import { streamText } from "ai";
 
 export async function OPTIONS() {
   const res = new Response(null, {
-      status: 200,
-      headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-      },
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
   });
   return res;
 }
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     // Use Gemini 1.5 Flash model for streaming
     const { textStream } = await streamText({
-      model: google("gemini-1.5-flash"),
+      model: google("gemini-2.0-flash-exp"),
       system: systemPrompt, // Use the dynamic system prompt
       prompt: promptText,   // Send the user's promptText to Gemini
     });

@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  order_id     String    @id
+  user_id      String
+  amount       Float
+  payment_link String
+  payments     Payment[]
+
+  @@map("orders")
+}
+
+model Payment {
+  payment_id         String   @id @default(uuid())
+  currency           String
+  status             String
+  created_at         DateTime @default(now())
+  transaction_time   DateTime
+  transaction_status String
+  order_id           String
+  signature_key      String
+  gross_amount       Float
+  payment_type       String
+  orderOrder_id      String
+  metadata           Json     @default("{}")
+  order              Order    @relation(fields: [orderOrder_id], references: [order_id])
+
+  @@map("payments")
+}
+
+model Balance {
+  balance_id String   @id @default(uuid())
+  user_id    String   @unique
+  amount     Float    @default(250000.0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("balances")
+}

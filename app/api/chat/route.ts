@@ -4,11 +4,24 @@ import { streamText } from 'ai';
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 60;
 
+export async function OPTIONS() {
+    const res = new Response(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Max-Age': '86400',
+        },
+    });
+    return res;
+}
+
 export async function POST(req: Request) {
     const { messages } = await req.json();
 
     const result = streamText({
-        model: google('gemini-1.5-pro') as any, // Temporary type assertion to bypass type mismatch
+        model: google('gemini-2.0-flash-exp'),
         messages,
         system: `
         You are a knowledgeable legal assistant that provides helpful information about legal topics.
@@ -33,5 +46,7 @@ export async function POST(req: Request) {
         Follow-up question: Would you like to know more about [related topic]?`
     });
 
-    return result.toDataStreamResponse();
+    const res = result.toDataStreamResponse();
+    res.headers.set("Access-Control-Allow-Origin", "*");
+    return res;
 }
