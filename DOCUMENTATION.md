@@ -46,24 +46,7 @@ Navigo is an AI-powered legal document platform designed specifically for Indone
 - **External Services**: Supabase, Sentry, Google AI API
 
 ### Environment Setup
-Create a `.env.local` file with the following variables:
-```env
-# Database
-DATABASE_URL="postgresql://..."
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
-
-# AI Services
-GOOGLE_GENERATIVE_AI_API_KEY="your-google-ai-key"
-
-# Sentry (optional)
-SENTRY_DSN="your-sentry-dsn"
-
-# Payment Integration
-MIDTRANS_SERVER_KEY="your-midtrans-key"
-```
+Create a `.env` file with the required environment variables. See [Section 7: Environment Variables](#7-environment-variables) for detailed configuration instructions and variable descriptions.
 
 ### Installation
 ```bash
@@ -539,10 +522,11 @@ SENTRY_DSN="https://your-sentry-dsn@sentry.io/project-id"
 
 ### Environment-Specific Configuration
 
-#### Development (`.env.local`)
+#### Development (`.env`)
 ```env
 NEXT_PUBLIC_API_URL="http://localhost:3000/api"
 VITE_AI_URL="http://localhost:8080/ai"
+OPENAI_API_KEY="sk-your-openai-api-key"
 GOOGLE_GENERATIVE_AI_API_KEY="your-dev-google-key"
 NEXT_PUBLIC_SUPABASE_URL="https://your-dev-project.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-dev-supabase-key"
