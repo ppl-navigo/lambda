@@ -20,6 +20,9 @@ importers:
       '@autometrics/autometrics':
         specifier: ^1.0.1
         version: 1.0.1
+      '@pinecone-database/pinecone':
+        specifier: ^6.0.1
+        version: 6.0.1
       '@prisma/client':
         specifier: 6.7.0
         version: 6.7.0(prisma@6.7.0(typescript@5.8.2))(typescript@5.8.2)
@@ -1031,6 +1034,10 @@ packages:
 
   '@pdf-lib/upng@1.0.1':
     resolution: {integrity: sha512-dQK2FUMQtowVP00mtIksrlZhdFXQZPC+taih1q4CvPZ5vqdxR/LKBaFg0oAfzd1GlHZXXSPdQfzQnt+ViGvEIQ==}
+
+  '@pinecone-database/pinecone@6.0.1':
+    resolution: {integrity: sha512-vCurixSZA7TRhPvLN9EL3k1HNHQ4ZY+A8zEAJrjgyW+IHaV7HLtCqRm0EHuauyhf/NNIiJG69r7hZYLsWOqACA==}
+    engines: {node: '>=18.0.0'}
 
   '@prisma/client@6.7.0':
     resolution: {integrity: sha512-+k61zZn1XHjbZul8q6TdQLpuI/cvyfil87zqK2zpreNIXyXtpUv3+H/oM69hcsFcZXaokHJIzPAt5Z8C8eK2QA==}
@@ -4877,6 +4884,8 @@ snapshots:
   '@pdf-lib/upng@1.0.1':
     dependencies:
       pako: 1.0.11
+
+  '@pinecone-database/pinecone@6.0.1': {}
 
   '@prisma/client@6.7.0(prisma@6.7.0(typescript@5.8.2))(typescript@5.8.2)':
     optionalDependencies:
