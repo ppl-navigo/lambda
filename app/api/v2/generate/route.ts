@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
         if (init) {
             await checkBalanceThenDeduct(
                 sessionData.session.user.id,
-                20000,
+                20,
             );
         }
     } catch (error) {
