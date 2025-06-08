@@ -39,7 +39,7 @@ model Payment {
 model Balance {
   balance_id String   @id @default(uuid())
   user_id    String   @unique
-  amount     Float    @default(250000.0)
+  amount     Float    @default(250.0)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 

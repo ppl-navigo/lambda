@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     console.log("User ID:", sessionData.session.user.id);
     await checkBalanceThenDeduct(
       sessionData.session.user.id,
-      30000,
+      30,
     )
   } catch (error) {
     console.error("Balance check failed:", error);
