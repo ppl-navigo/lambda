@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     } catch (error) {
         console.error("Balance check failed:", error);
         return new Response(
-            JSON.stringify({ error: "Insufficient balance" }),
+            JSON.stringify({ error }),
             {
                 status: 402,
                 headers: {
