@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     try {
         await checkBalanceThenDeduct(
             sessionData.session.user.id,
-            process.env.GENERATE_UNLOCK_COST ? parseInt(process.env.GENERATE_UNLOCK_COST) : 30
+            process.env.GENERATE_UNLOCK_COST ? parseInt(process.env.GENERATE_UNLOCK_COST) : 20
         )
     }
     catch (error) {
