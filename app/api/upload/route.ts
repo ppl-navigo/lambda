@@ -1,4 +1,3 @@
-import { checkBalanceThenDeduct } from "@/utils/checkBalanceThenDeduct";
 import { supabase } from "@/utils/supabase";
 import { v2 as cloudinary } from "cloudinary";
 import { NextResponse } from "next/server";
@@ -64,28 +63,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Invalid session" },
       { status: 401, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  try {
-    console.log("User ID:", sessionData.session.user.id);
-    await checkBalanceThenDeduct(
-      sessionData.session.user.id,
-      30,
-    )
-  } catch (error) {
-    console.error("Balance check failed:", error);
-    return new Response(
-      JSON.stringify({ error: "Insufficient balance" }),
-      {
-        status: 402, headers: {
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-        }
-      }
     );
   }
 

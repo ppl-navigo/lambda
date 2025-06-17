@@ -4,7 +4,6 @@ import { streamObject } from "ai";
 import { google } from "@ai-sdk/google";
 import { legalDocumentPageSchema } from "@/utils/legalDocumentPageSchema";
 import { SYSTEM_PROMPT } from "@/utils/prompts/generateDoc";
-import { checkBalanceThenDeduct } from "@/utils/checkBalanceThenDeduct";
 import { supabase } from "@/utils/supabase";
 
 export const maxDuration = 60;
@@ -38,29 +37,6 @@ export async function POST(req: NextRequest) {
             {
                 status: 401,
                 headers: { "Content-Type": "application/json" },
-            }
-        );
-    }
-    try {
-        if (init) {
-            await checkBalanceThenDeduct(
-                sessionData.session.user.id,
-                20,
-            );
-        }
-    } catch (error) {
-        console.error("Balance check failed:", error);
-        return new Response(
-            JSON.stringify({ error }),
-            {
-                status: 402,
-                headers: {
-                    "Content-Type": "application/json",
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                    'Access-Control-Allow-Headers': 'Content-Type, authorization, X-Refresh-Token',
-                    'Access-Control-Max-Age': '86400',
-                }
             }
         );
     }
