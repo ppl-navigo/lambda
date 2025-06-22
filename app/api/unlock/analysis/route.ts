@@ -15,6 +15,8 @@ interface AuthPayload {
     accessToken?: string;
 }
 
+export const maxDuration = 60; // Allow streaming responses up to 60 seconds
+
 
 export async function POST(request: Request) {
     const body = await request.json() as AuthPayload;
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
     try {
         await checkBalanceThenDeduct(
             sessionData.session.user.id,
-            process.env.ANALYSIS_UNLOCK_COST ? parseInt(process.env.ANALYSIS_UNLOCK_COST) : 20
+            process.env.ANALYSIS_UNLOCK_COST ? parseInt(process.env.ANALYSIS_UNLOCK_COST) : 30
         )
     }
     catch (error) {
