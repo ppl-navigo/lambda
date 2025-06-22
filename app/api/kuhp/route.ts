@@ -10,7 +10,7 @@ export const maxDuration = 60;
 export async function OPTIONS() {
     const response = NextResponse.json({ status: 200 })
     response.headers.set("Access-Control-Allow-Origin", "*")
-    response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS")
+    response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS")
     response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, xyz")
     response.headers.set("Access-Control-Max-Age", "86400")
     return response
