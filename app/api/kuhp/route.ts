@@ -8,16 +8,14 @@ import { z } from 'zod';
 export const maxDuration = 60;
 
 export async function OPTIONS() {
-    return new NextResponse(null, {
-        status: 200,
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-            'Access-Control-Max-Age': '86400',
-        },
-    });
+    const response = NextResponse.json({ status: 200 })
+    response.headers.set("Access-Control-Allow-Origin", "*")
+    response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS")
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, xyz")
+    response.headers.set("Access-Control-Max-Age", "86400")
+    return response
 }
+
 
 // Skema Zod yang disesuaikan kembali dengan struktur content/sections/penjelasan
 const docSchema = z.object({
