@@ -1,6 +1,7 @@
 import { index } from '@/utils/pinecone';
 import { google } from '@ai-sdk/google';
-import { embed, generateObject } from 'ai';
+import { embed, generateObject, generateText } from 'ai';
+import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -49,19 +50,155 @@ export async function POST(req: Request) {
             value: query,
         });
 
-        const articles = await index.query({
+        let articles = await index.query({
             vector: embedding as any,
             topK: 10, // Mengambil 10 hasil teratas untuk konteks yang lebih kaya
             includeMetadata: true,
         });
 
+
+        const esQueryPrompt = `
+You are an expert Elasticsearch query generator for Indonesian legal documents.
+
+# Instructions
+- Always return a JSON Elasticsearch query.
+- Use a "bool" query with "should" to match both the "pasal" field (with boost 3) and the "content" field for ayat/verse references.
+- For specific articles, match "pasal" with a boost.
+- For ayat/verse, also match "content" with the ayat number.
+- If only a pasal is mentioned, still include both "pasal" and "content" matches.
+- Do not include explanations or comments.
+
+# Examples
+
+## Example 1
+User: Apa isi Pasal 2?
+Chain of Thought:
+- The user wants Article 2.
+- Match "pasal" with boost, and also match "content" for possible ayat references.
+
+Output:
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "match": {
+            "pasal": {
+              "query": "Pasal 2",
+              "boost": 3
+            }
+          }
+        },
+        {
+          "match": {
+            "content": {
+              "query": "(2) ayat 2"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+## Example 2
+User: Apa isi Pasal 2 ayat (1)?
+Chain of Thought:
+- The user wants Article 2, verse (1).
+- Match "pasal" with boost, and also match "content" for ayat (1).
+
+Output:
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "match": {
+            "pasal": {
+              "query": "Pasal 2 ayat (1)",
+              "boost": 3
+            }
+          }
+        },
+        {
+          "match": {
+            "content": {
+              "query": "(1) ayat 1"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+DO NOT GENERATE THE MARKDOWN FORMATING JUST RETURN THE OBJECT
+
+THE OBJECT ONLY
+
+IT WILL BE PUT INTO JSON.parse
+
+if the string you're returning isnt a valid query or json it will crash and i and you will be severely punished!!!
+
+INSTEAD OF 
+
+\`\`\`json
+... query
+\`\`\`
+
+JUST RETURN
+
+... query
+
+# Now, generate the Elasticsearch query for the following user question:
+User: {user_question}
+`;
+
+        const esQuery = await generateText({
+            model: google("gemini-2.0-flash-exp"),
+            prompt: `
+            ${esQueryPrompt}
+
+            The user's question is: "${query}"
+            `,
+        })
+
+        let esRes;
+        try {
+            esRes = await axios.post("https://search.litsindonesia.com/kuhp_bm25/_search", {
+                ...JSON.parse(esQuery.text.replace("```json", "").replace("```", ""))
+            });
+        } catch (err) {
+            // Fallback: simple match query on "pasal" field only
+            try {
+                esRes = await axios.post("https://search.litsindonesia.com/kuhp_bm25/_search", {
+                    query: {
+                        match: {
+                            content: query
+                        }
+                    }
+                });
+            } catch (fallbackErr) {
+                return NextResponse.json(
+                    { error: 'Failed to query legal articles.' },
+                    { status: 502 }
+                );
+            }
+        }
+
         // Pra-pemrosesan konteks untuk keterbacaan yang lebih baik di dalam prompt
-        const contextString = articles.matches.map(match => {
+        let contextString = articles.matches.map(match => {
             const metadata = match.metadata as { content?: string; penjelasan?: string; } || {};
             const content = metadata.content || 'No content available';
             const penjelasan = metadata.penjelasan || 'No explanation available';
             return `ID: ${match.id}\nContent: ${content}\nPenjelasan: ${penjelasan}`;
         }).join('\n---\n');
+
+        contextString += `
+        SPARSE ELASTICSEARCH RESULTS
+
+        ${JSON.stringify(esRes.data, null, 2)}
+        `
 
         // --- PROMPT ENGINEERING YANG DISEMPURNAKAN ---
         const systemPrompt = `
@@ -102,8 +239,10 @@ Berdasarkan pertanyaan terakhir dari pengguna dan konteks di atas, hasilkan obje
 Pertanyaan Pengguna: "${query}"
 `;
 
+        console.log(contextString, esQuery.text)
+
         const result = await generateObject({
-            model: google("gemini-1.5-flash"),
+            model: google("gemini-2.0-flash-exp"),
             system: systemPrompt,
             messages: filteredMessages, // Gunakan pesan yang sudah disaring
             schema: docSchema,

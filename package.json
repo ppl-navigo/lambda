@@ -30,6 +30,7 @@
     "fs": "0.0.1-security",
     "input": "^1.0.1",
     "jspdf": "^3.0.1",
+    "jsx": "^0.9.89",
     "jwt-decode": "^4.0.0",
     "localforage": "^1.10.0",
     "lucide-react": "^0.479.0",
