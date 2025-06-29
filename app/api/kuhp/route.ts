@@ -61,12 +61,11 @@ export async function POST(req: Request) {
 You are an expert Elasticsearch query generator for Indonesian legal documents.
 
 # Instructions
-- Always return a JSON Elasticsearch query.
-- Use a "bool" query with "should" to match both the "pasal" field (with boost 3) and the "content" field for ayat/verse references.
-- For specific articles, match "pasal" with a boost.
-- For ayat/verse, also match "content" with the ayat number.
-- If only a pasal is mentioned, still include both "pasal" and "content" matches.
+- All documents have the field "pasal" with the format: "Pasal <number>".
+- If the user query specifies a particular pasal (e.g., "Pasal 2"), generate a bool query with "should" that matches the "pasal" field (with boost 3) and the "content" field for ayat/verse references.
+- If the user query does NOT specify any specific pasal, you may exclude the "pasal" field from the query and just match the "content" field.
 - Do not include explanations or comments.
+- Always return a valid JSON object only.
 
 # Examples
 
@@ -132,23 +131,28 @@ Output:
   }
 }
 
-DO NOT GENERATE THE MARKDOWN FORMATING JUST RETURN THE OBJECT
+## Example 3
+User: Apa aturan tentang pembunuhan?
+Chain of Thought:
+- No specific pasal mentioned.
+- Only match "content" field.
+
+Output:
+{
+  "query": {
+    "match": {
+      "content": "pembunuhan"
+    }
+  }
+}
+
+DO NOT GENERATE THE MARKDOWN FORMATTING JUST RETURN THE OBJECT
 
 THE OBJECT ONLY
 
 IT WILL BE PUT INTO JSON.parse
 
-if the string you're returning isnt a valid query or json it will crash and i and you will be severely punished!!!
-
-INSTEAD OF 
-
-\`\`\`json
-... query
-\`\`\`
-
-JUST RETURN
-
-... query
+if the string you're returning isn't a valid query or json it will crash and i and you will be severely punished!!!
 
 # Now, generate the Elasticsearch query for the following user question:
 User: {user_question}
@@ -187,15 +191,14 @@ User: {user_question}
         }
 
         // Pra-pemrosesan konteks untuk keterbacaan yang lebih baik di dalam prompt
-        let contextString = articles.matches.map(match => {
-            const metadata = match.metadata as { content?: string; penjelasan?: string; } || {};
-            const content = metadata.content || 'No content available';
-            const penjelasan = metadata.penjelasan || 'No explanation available';
-            return `ID: ${match.id}\nContent: ${content}\nPenjelasan: ${penjelasan}`;
-        }).join('\n---\n');
+        let contextString = `
+        DENSE PINECONE RESULTS:
+
+        ${JSON.stringify(articles, null, 2)}
+        `;
 
         contextString += `
-        SPARSE ELASTICSEARCH RESULTS
+        SPARSE ELASTICSEARCH RESULTS:
 
         ${JSON.stringify(esRes.data, null, 2)}
         `
@@ -248,8 +251,15 @@ Pertanyaan Pengguna: "${query}"
             schema: docSchema,
         });
 
+
         return NextResponse.json(
-            result.object, {
+            {
+                articles: result.object.articles.map(({ id, ...article }) => ({
+                    id: id.replace("UU Nomor 1 Tahun 2023", "").trim(),
+                    ...article
+                })),
+                summary: result.object.summary
+            }, {
             headers: {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, OPTIONS',
