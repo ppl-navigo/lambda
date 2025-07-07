@@ -201,7 +201,7 @@ Pertanyaan Pengguna: "${query}"
 
         const articlesForResponse = Object.values(fetchedRecords).map(vec => ({
             id: vec.id,
-            content: vec.metadata?.text as string ?? 'Konten tidak ditemukan.',
+            content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
             penjelasan: vec.metadata?.penjelasan as string ?? '',
         }));
 
