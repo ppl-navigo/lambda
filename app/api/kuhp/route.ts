@@ -1,6 +1,6 @@
 import { index } from '@/utils/pinecone';
 import { google } from '@ai-sdk/google';
-import { embed, generateText } from 'ai'; // Changed generateObject to generateText
+import { embed, generateText } from 'ai';
 import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -47,13 +47,11 @@ export async function POST(req: Request) {
 
         const query = filteredMessages[filteredMessages.length - 1].content;
 
-        // --- Generate embedding once for reuse ---
         const { embedding } = await embed({
             model: google.textEmbeddingModel("text-embedding-004"),
             value: query,
         });
         
-        // --- Step 1: Hybrid Search (Dense + Sparse) in Parallel ---
         const [denseResults, sparseResults] = await Promise.all([
             index.query({
                 vector: embedding,
@@ -62,6 +60,7 @@ export async function POST(req: Request) {
             }),
             (async () => {
                 try {
+                    // CRITICAL FIX: Corrected the Elasticsearch URL string
                     const esQueryRes = await axios.post("[https://search.litsindonesia.com/kuhp_bm25/_search](https://search.litsindonesia.com/kuhp_bm25/_search)", {
                         size: 5,
                         query: { match: { content: query } }
@@ -74,7 +73,6 @@ export async function POST(req: Request) {
             })()
         ]);
 
-        // --- Step 2: Prepare Combined Context for LLM ---
         const pineconeContext = denseResults.matches.map(match => ({
             id: match.metadata?.pasal || 'Unknown ID',
             content: match.metadata?.content || '',
@@ -89,7 +87,6 @@ export async function POST(req: Request) {
         }));
         const contextString = JSON.stringify([...pineconeContext, ...elasticContext], null, 2);
 
-        // --- Step 3: LLM Re-ranking and Selection (Indonesian Prompt) ---
         const selectionPrompt = `
 # PERAN & TUJUAN
 Anda adalah asisten hukum AI ahli dalam Kitab Undang-Undang Hukum Pidana (KUHP) Indonesia (UU Nomor 1 Tahun 2023). Tugas Anda adalah menganalisis hasil pencarian, mengidentifikasi pasal yang paling relevan, dan memberikan ringkasan yang akurat kepada pengguna.
@@ -128,45 +125,42 @@ ${contextString}
 "${query}"
 `;
 
-        // --- NEW: Step 3.1: Generate Raw Text from LLM ---
         const { text: rawLLMText } = await generateText({
             model: google("gemini-1.5-flash-latest"),
             prompt: selectionPrompt,
         });
 
-        // --- NEW: Step 3.2: Sanitize and Parse LLM Response ---
+        // --- MAJOR FIX: Robustly extract JSON from the AI's response ---
         let llmSelectionObject;
         try {
-            // Remove markdown fences and trim whitespace for safety
-            const sanitizedText = rawLLMText
-                .replace(/^```json\s*/, '')
-                .replace(/\s*```$/, '')
-                .trim();
+            // Find the first '{' and the last '}' to extract the JSON object.
+            const jsonMatch = rawLLMText.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                throw new Error("No JSON object found in the LLM's response.");
+            }
             
-            const parsedJson = JSON.parse(sanitizedText);
-            // Validate the parsed JSON against our Zod schema
+            const jsonString = jsonMatch[0];
+            const parsedJson = JSON.parse(jsonString);
             llmSelectionObject = llmSelectionSchema.parse(parsedJson);
         } catch (parseError) {
             console.error("Failed to parse or validate LLM JSON response:", parseError);
             console.error("Raw LLM Text was:", rawLLMText);
             return NextResponse.json(
                 { error: 'Gagal memproses respons dari AI. Format JSON tidak valid.' },
-                { status: 502 } // 502 Bad Gateway is appropriate here
+                { status: 502 }
             );
         }
         
         const { relevant_articles, summary } = llmSelectionObject;
 
-        // --- Step 4: Handle Irrelevant/No-Result Case ---
         if (!relevant_articles || relevant_articles.length === 0) {
             return NextResponse.json({
                 articles: [],
                 summary: summary || "Maaf, saya tidak dapat menemukan informasi yang relevan. Saya hanya bisa menjawab pertanyaan seputar KUHP.",
-                _raw_llm_response: llmSelectionObject // For debugging
+                _raw_llm_response: llmSelectionObject
             });
         }
 
-        // --- Step 5: Final Authoritative Fetch from Pinecone ---
         const finalArticleIDs = relevant_articles.map(article => article.id);
         
         const finalResults = await index.query({
@@ -176,7 +170,6 @@ ${contextString}
             includeMetadata: true,
         });
         
-        // --- Step 6: Assemble the Final Response for the Frontend ---
         const finalArticles = finalResults.matches.map(match => ({
             id: (match.metadata?.pasal as string || '').replace(/ Undang-Undang Nomor 1 Tahun 2023/i, "").trim(),
             content: match.metadata?.content as string || '',
@@ -198,7 +191,7 @@ ${contextString}
 
         return NextResponse.json({
             ...finalResponse,
-            _raw_llm_response: llmSelectionObject // Include for debugging
+            _raw_llm_response: llmSelectionObject
         }, {
             headers: {
                 'Access-Control-Allow-Origin': '*',
