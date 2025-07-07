@@ -49,14 +49,16 @@ export async function POST(req: Request) {
 
         const query = filteredMessages[filteredMessages.length - 1].content;
 
+        // --- Generate embedding once for reuse ---
+        const { embedding } = await embed({
+            model: google.textEmbeddingModel("text-embedding-004"),
+            value: query,
+        });
+        
         // --- Step 1: Hybrid Search (Dense + Sparse) in Parallel ---
         const [denseResults, sparseResults] = await Promise.all([
             // Dense search with Pinecone
             (async () => {
-                const { embedding } = await embed({
-                    model: google.textEmbeddingModel("text-embedding-004"),
-                    value: query,
-                });
                 return index.query({
                     vector: embedding,
                     topK: 5,
@@ -148,6 +150,7 @@ ${contextString}
         // Fetching full data using the IDs identified by the LLM
         // We query with a metadata filter to get the exact articles.
         const finalResults = await index.query({
+            vector: embedding,
             topK: 3, // Fetch up to 3 articles
             filter: {
                 "pasal": { "$in": finalArticleIDs }
