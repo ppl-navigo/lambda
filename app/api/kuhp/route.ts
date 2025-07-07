@@ -1,6 +1,6 @@
 import { index } from '@/utils/pinecone';
 import { google } from '@ai-sdk/google';
-import { embed, generateText } from 'ai';
+import { embed, generateObject } from 'ai';
 import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -16,183 +16,202 @@ export async function OPTIONS() {
     return response;
 }
 
-// Zod Schema for the final response structure expected by the frontend
-const finalResponseSchema = z.object({
+// Internal schema for the LLM's direct output
+const llmResponseSchema = z.object({
     articles: z.array(z.object({
-        id: z.string().describe("Nomor pasal, e.g., 'Pasal 476'"),
-        content: z.string().describe("Isi mentah dari pasal tersebut."),
-        penjelasan: z.string().describe("Penjelasan resmi dari pasal tersebut.").optional(),
-    })),
-    summary: z.string().describe("Ringkasan jawaban yang jelas untuk pengguna."),
+        id: z.string().describe("Nomor pasal yang paling relevan, format 'Pasal [nomor]'. Contoh: 'Pasal 480'."),
+    })).describe("Daftar pasal yang paling relevan dengan pertanyaan pengguna, maksimal 3."),
+    summary: z.string().describe("Jawaban ringkas dan langsung untuk pertanyaan pengguna."),
+    is_irrelevant: z.boolean().describe("Setel ke true HANYA jika pertanyaan pengguna sama sekali tidak berhubungan dengan hukum atau KUHP."),
+    is_direct_request: z.boolean().describe("Setel ke true jika pengguna secara spesifik meminta isi dari satu pasal tertentu (contoh: 'isi pasal 123')."),
+    direct_pasal_id: z.string().optional().describe("Jika is_direct_request adalah true, isi dengan ID pasal yang diminta, format 'Pasal [nomor]'.")
 });
 
-// Zod Schema for the intermediate LLM selection step
-const llmSelectionSchema = z.object({
-    relevant_articles: z.array(z.object({
-        id: z.string().describe("ID pasal yang paling relevan dari konteks, format 'Pasal [nomor]'."),
-    })).describe("Array berisi 1-3 ID pasal yang paling relevan. HARUS KOSONG jika pertanyaan tidak relevan."),
-    summary: z.string().describe("Ringkasan jawaban untuk pengguna berdasarkan pasal yang dipilih. Jika tidak relevan, berikan pesan penolakan."),
-    is_direct_query: z.boolean().describe("Bernilai true HANYA jika pengguna bertanya spesifik tentang nomor pasal."),
+
+// Final response schema matching the frontend's expectation
+const finalResponseSchema = z.object({
+    articles: z.array(z.object({
+        id: z.string(),
+        content: z.string(),
+        penjelasan: z.string().optional(),
+    })),
+    summary: z.string(),
 });
+
+// Utility function to sanitize LLM's JSON output
+const sanitizeJsonString = (jsonString: string): string => {
+    return jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+};
 
 
 export async function POST(req: Request) {
     try {
         const { messages } = await req.json();
 
+        // Filter out empty messages to prevent errors
         const filteredMessages = messages.filter((msg: { content: string; }) => msg.content && msg.content.trim() !== '');
         if (filteredMessages.length === 0) {
             return NextResponse.json({ error: 'Query is required' }, { status: 400 });
         }
 
-        const query = filteredMessages[filteredMessages.length - 1].content;
+        const query = filteredMessages[filteredMessages.length - 1]?.content || '';
+        if (!query) {
+            return NextResponse.json({ error: 'Query string is required' }, { status: 400 });
+        }
 
+        console.log(`[DEBUG] Received query: "${query}"`);
+
+        // --- 1. Hybrid Retrieval Step ---
+
+        // a) Dense search (Pinecone)
         const { embedding } = await embed({
             model: google.textEmbeddingModel("text-embedding-004"),
             value: query,
         });
-        
-        const [denseResults, sparseResults] = await Promise.all([
-            index.query({
-                vector: embedding,
-                topK: 5,
-                includeMetadata: true,
-            }),
-            (async () => {
-                try {
-                    // CRITICAL FIX: Corrected the Elasticsearch URL string
-                    const esQueryRes = await axios.post("[https://search.litsindonesia.com/kuhp_bm25/_search](https://search.litsindonesia.com/kuhp_bm25/_search)", {
-                        size: 5,
-                        query: { match: { content: query } }
-                    });
-                    return esQueryRes.data.hits.hits;
-                } catch (err) {
-                    console.error("Elasticsearch query failed:", err);
-                    return [];
-                }
-            })()
-        ]);
 
-        const pineconeContext = denseResults.matches.map(match => ({
-            id: match.metadata?.pasal || 'Unknown ID',
-            content: match.metadata?.content || '',
-            score: match.score,
-            source: 'dense'
-        }));
-        const elasticContext = sparseResults.map((hit: any) => ({
-            id: hit._source.pasal,
-            content: hit._source.content,
-            score: hit._score,
-            source: 'sparse'
-        }));
-        const contextString = JSON.stringify([...pineconeContext, ...elasticContext], null, 2);
-
-        const selectionPrompt = `
-# PERAN & TUJUAN
-Anda adalah asisten hukum AI ahli dalam Kitab Undang-Undang Hukum Pidana (KUHP) Indonesia (UU Nomor 1 Tahun 2023). Tugas Anda adalah menganalisis hasil pencarian, mengidentifikasi pasal yang paling relevan, dan memberikan ringkasan yang akurat kepada pengguna.
-
-# INSTRUKSI
-1.  **Analisis Konteks**: Tinjau \`KONTEKS_GABUNGAN\` yang berisi pasal-pasal dari pencarian.
-2.  **Identifikasi Relevansi**: Tentukan 1 hingga 3 pasal dari konteks yang PALING TEPAT menjawab \`PERTANYAAN_PENGGUNA\`.
-3.  **Tangani Pertanyaan Langsung**: Jika pengguna bertanya spesifik nomor pasal (misal: "isi pasal 2", "pasal 362 tentang apa"), ini adalah **pertanyaan langsung**.
-    * Atur \`is_direct_query\` menjadi \`true\`.
-    * Pilihan utama Anda untuk \`relevant_articles\` HARUS ID pasal yang diminta. ABAIKAN konteks jika tidak memuat pasal yang diminta. Pilih hanya SATU pasal.
-4.  **Tangani Pertanyaan Tidak Relevan**: Jika pertanyaan sama sekali tidak berhubungan dengan hukum pidana Indonesia (misal: "apa cuaca hari ini?"), atau JIKA TIDAK ADA pasal dalam konteks yang relevan:
-    * Kembalikan array kosong untuk \`relevant_articles\`.
-    * Tulis ringkasan sopan yang menjelaskan Anda hanya bisa menjawab pertanyaan seputar KUHP.
-5.  **Buat Ringkasan**: Buat \`summary\` yang ringkas dan bermanfaat, menjawab langsung pertanyaan pengguna berdasarkan pasal yang Anda pilih.
-6.  **SANGAT PENTING: FORMAT OUTPUT JSON**:
-    * Output Anda HARUS berupa satu objek JSON yang valid dan tidak ada teks lain di luar JSON.
-    * Struktur JSON harus SAMA PERSIS seperti skema di bawah ini. JANGAN mengubah nama field atau struktur.
-
-# FORMAT OUTPUT JSON (WAJIB DIIKUTI)
-\`\`\`json
-{
-  "relevant_articles": [
-    {
-      "id": "Pasal [nomor]"
-    }
-  ],
-  "summary": "Ringkasan jawaban Anda di sini.",
-  "is_direct_query": false
-}
-\`\`\`
-
-# KONTEKS_GABUNGAN
-${contextString}
-
-# PERTANYAAN_PENGGUNA
-"${query}"
-`;
-
-        const { text: rawLLMText } = await generateText({
-            model: google("gemini-1.5-flash-latest"),
-            prompt: selectionPrompt,
-        });
-
-        // --- MAJOR FIX: Robustly extract JSON from the AI's response ---
-        let llmSelectionObject;
-        try {
-            // Find the first '{' and the last '}' to extract the JSON object.
-            const jsonMatch = rawLLMText.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error("No JSON object found in the LLM's response.");
-            }
-            
-            const jsonString = jsonMatch[0];
-            const parsedJson = JSON.parse(jsonString);
-            llmSelectionObject = llmSelectionSchema.parse(parsedJson);
-        } catch (parseError) {
-            console.error("Failed to parse or validate LLM JSON response:", parseError);
-            console.error("Raw LLM Text was:", rawLLMText);
-            return NextResponse.json(
-                { error: 'Gagal memproses respons dari AI. Format JSON tidak valid.' },
-                { status: 502 }
-            );
-        }
-        
-        const { relevant_articles, summary } = llmSelectionObject;
-
-        if (!relevant_articles || relevant_articles.length === 0) {
-            return NextResponse.json({
-                articles: [],
-                summary: summary || "Maaf, saya tidak dapat menemukan informasi yang relevan. Saya hanya bisa menjawab pertanyaan seputar KUHP.",
-                _raw_llm_response: llmSelectionObject
-            });
-        }
-
-        const finalArticleIDs = relevant_articles.map(article => article.id);
-        
-        const finalResults = await index.query({
+        const denseResults = await index.query({
             vector: embedding,
-            topK: 3,
-            filter: { "pasal": { "$in": finalArticleIDs } },
+            topK: 5,
             includeMetadata: true,
         });
-        
-        const finalArticles = finalResults.matches.map(match => ({
-            id: (match.metadata?.pasal as string || '').replace(/ Undang-Undang Nomor 1 Tahun 2023/i, "").trim(),
-            content: match.metadata?.content as string || '',
-            penjelasan: match.metadata?.penjelasan as string || '',
-        }));
+        console.log(`[DEBUG] Pinecone (Dense) results fetched: ${denseResults.matches.length}`);
 
-        if (finalArticles.length === 0) {
-            return NextResponse.json({
+
+        // b) Sparse search (Elasticsearch)
+        let sparseResults: any[] = [];
+        try {
+            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_bm25/_search", {
+                query: { match: { content: query } },
+                size: 5
+            });
+            sparseResults = esRes.data.hits.hits;
+            console.log(`[DEBUG] Elasticsearch (Sparse) results fetched: ${sparseResults.length}`);
+        } catch (err) {
+            console.error("[DEBUG] Elasticsearch query failed:", err);
+            // Continue without sparse results if it fails
+        }
+
+        // c) Combine and format context
+        const combinedContext = [
+            ...denseResults.matches.map(m => ({
+                id: m.id,
+                score: m.score,
+                source: 'dense',
+                content: m.metadata?.text || ''
+            })),
+            ...sparseResults.map(h => ({
+                id: h._source.pasal,
+                score: h._score,
+                source: 'sparse',
+                content: `${h._source.pasal}: ${h._source.content}`
+            }))
+        ];
+        console.log(`[DEBUG] Combined context size: ${combinedContext.length}`);
+
+        const contextString = combinedContext
+            .map(c => `ID: ${c.id}\nContent: ${c.content}\n---`)
+            .join('\n\n');
+
+        // --- 2. LLM Processing Step ---
+        const systemPrompt = `
+# PERAN & TUJUAN
+Anda adalah Asisten Hukum AI yang ahli dalam UU No. 1 Tahun 2023. Tugas Anda adalah menganalisis pertanyaan pengguna dan konteks untuk memberikan jawaban yang akurat.
+
+# ALUR KERJA
+1.  **CEK PERMINTAAN LANGSUNG (PALING PENTING!)**: Pertama, periksa apakah pengguna meminta isi pasal tertentu secara langsung (contoh: "jelaskan pasal 480", "apa isi pasal 378", "bunyi pasal 100").
+    * **JIKA YA**: Setel \`is_direct_request\` ke \`true\`. Ekstrak nomor pasalnya dan letakkan dalam format 'Pasal [nomor]' di \`direct_pasal_id\`. **ABAIKAN KONTEKS PENCARIAN**. Biarkan \`articles\` kosong. Ini adalah prioritas utama Anda. Buat ringkasan umum seperti "Berikut adalah isi dari pasal yang Anda minta."
+    * **JIKA TIDAK**: Lanjutkan ke alur kerja normal di bawah ini. Setel \`is_direct_request\` ke \`false\` dan \`direct_pasal_id\` biarkan kosong.
+
+2.  **Alur Kerja Normal (Untuk Pertanyaan Konsep Umum)**:
+    * **Evaluasi Konteks**: Tinjau konteks dari \`DENSE\` & \`SPARSE\` untuk menjawab pertanyaan umum (contoh: "hukuman untuk pencurian").
+    * **Identifikasi Pasal Relevan**: Dari konteks, pilih 1 hingga 3 ID pasal yang paling relevan dan masukkan ke array \`articles\`.
+    * **Cek Relevansi**: Jika pertanyaan umum sama sekali tidak berhubungan dengan hukum, setel \`is_irrelevant\` ke \`true\`.
+    * **Buat Ringkasan**: Buat ringkasan jawaban berdasarkan pasal yang relevan dari konteks.
+
+# ATURAN KETAT
+-   Prioritaskan Permintaan Langsung**: Aturan untuk \`is_direct_request\` mengalahkan semua aturan lain.
+-   **Output WAJIB JSON**: Selalu kembalikan objek JSON yang valid. Jangan tambahkan \`\`\`json atau teks lain di luar objek.
+-   **ID Pasal**: \`id\` harus berupa string dengan format "Pasal [nomor]".
+-   **Maksimal 3 Pasal**: Jangan pernah mengembalikan lebih dari 3 pasal dalam array \`articles\`.
+-   **Fokus pada Relevansi**: Prioritaskan pasal yang paling menjawab pertanyaan. Jika ada satu pasal yang sangat relevan, cukup kembalikan satu itu saja.
+
+# KONTEKS PENCARIAN
+${contextString}
+
+# TUGAS ANDA
+Berdasarkan pertanyaan pengguna di bawah dan konteks di atas, hasilkan objek JSON.
+
+Pertanyaan Pengguna: "${query}"
+`;
+
+        const { object: llmResponse } = await generateObject({
+            model: google("gemini-2.0-flash-exp"),
+            prompt: systemPrompt,
+            schema: llmResponseSchema,
+        });
+
+        console.log("[DEBUG] LLM Response:", llmResponse);
+
+        // --- NEW: Direct Request Handling ---
+        if (llmResponse.is_direct_request && llmResponse.direct_pasal_id) {
+            console.log(`[DEBUG] Query identified as a direct request for: ${llmResponse.direct_pasal_id}`);
+            // Override and force fetch the single, correct article
+            const articleIds = [llmResponse.direct_pasal_id];
+            const fetchResponse = await index.fetch(articleIds);
+            const articlesForResponse = Object.values(fetchResponse.records ?? {}).map(vec => ({
+                id: vec.id,
+                content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
+                penjelasan: vec.metadata?.penjelasan as string ?? '',
+            }));
+            const finalResponse = { articles: articlesForResponse, summary: "" };
+            return NextResponse.json(finalResponse, { headers: { 'Access-Control-Allow-Origin': '*' } });
+        }
+
+        // --- 3. Irrelevancy Handling ---
+        if (llmResponse.is_irrelevant) {
+            console.log("[DEBUG] Query identified as irrelevant.");
+            const irrelevantResponse = {
                 articles: [],
-                summary: summary,
-                _raw_llm_response: llmSelectionObject
+                summary: "Maaf, saya hanya dapat menjawab pertanyaan yang berkaitan dengan Kitab Undang-Undang Hukum Pidana (UU No. 1 Tahun 2023). Silakan ajukan pertanyaan seputar hukum pidana di Indonesia."
+            };
+            return NextResponse.json(irrelevantResponse, {
+                headers: { 'Access-Control-Allow-Origin': '*' }
             });
         }
 
+
+        // --- 4. Final Grounding & Formatting ---
+        if (!llmResponse.articles || llmResponse.articles.length === 0) {
+            console.log("[DEBUG] LLM did not return any relevant articles. Providing generic response.");
+             const fallbackResponse = {
+                articles: [],
+                summary: "Maaf, saya tidak dapat menemukan pasal yang relevan dengan pertanyaan Anda saat ini. Mohon coba ajukan pertanyaan dengan lebih spesifik."
+            };
+            return NextResponse.json(fallbackResponse, {
+                headers: { 'Access-Control-Allow-Origin': '*' }
+            });
+        }
+
+        const articleIds = llmResponse.articles.map(a => a.id);
+        console.log(`[DEBUG] IDs selected by LLM: ${articleIds.join(', ')}`);
+
+        // Fetch full data from Pinecone for the final response to ensure accuracy
+        const fetchResponse = await index.fetch(articleIds);
+        const fetchedRecords = fetchResponse.records ?? {};
+
+        const articlesForResponse = Object.values(fetchedRecords).map(vec => ({
+            id: vec.id,
+            content: vec.metadata?.text as string ?? 'Konten tidak ditemukan.',
+            penjelasan: vec.metadata?.penjelasan as string ?? '',
+        }));
+
+
         const finalResponse: z.infer<typeof finalResponseSchema> = {
-            articles: finalArticles,
-            summary: summary,
+            articles: articlesForResponse,
+            summary: llmResponse.summary,
         };
 
-        return NextResponse.json({
-            ...finalResponse,
-            _raw_llm_response: llmSelectionObject
-        }, {
+        return NextResponse.json(finalResponse, {
             headers: {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -201,10 +220,9 @@ ${contextString}
         });
 
     } catch (error) {
-        console.error('Error processing request:', error);
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        console.error('[FATAL] Error processing request:', error);
         return NextResponse.json(
-            { error: 'An internal server error occurred.', details: errorMessage },
+            { error: 'An internal server error occurred.' },
             { status: 500 }
         );
     }
