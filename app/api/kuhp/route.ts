@@ -128,7 +128,7 @@ ${contextString}
 
         const llmSelection = await generateObject({
             model: google("gemini-2.0-flash"),
-            system: selectionPrompt,
+            prompt: selectionPrompt,
             schema: llmSelectionSchema,
         });
 
