@@ -245,7 +245,7 @@ Pertanyaan Pengguna: "${query}"
 
 
         // --- 4. Final Grounding & Formatting ---
-        if (!llmResponse.articles || llmResponse.articles.length === 0) {
+        if ((!llmResponse.articles || llmResponse.articles.length === 0) && !llmResponse.summary) {
             console.log("[DEBUG] LLM did not return any relevant articles. Providing generic response.");
              const fallbackResponse = {
                 articles: [],
@@ -259,16 +259,19 @@ Pertanyaan Pengguna: "${query}"
         const articleIds = llmResponse.articles.map(a => a.id);
         console.log(`[DEBUG] IDs selected by LLM: ${articleIds.join(', ')}`);
 
-        // Fetch full data from Pinecone for the final response to ensure accuracy
-        const fetchResponse = await index.fetch(articleIds);
-        const fetchedRecords = fetchResponse.records ?? {};
+        let articlesForResponse: z.infer<typeof finalResponseSchema>['articles'] = [];
 
-        const articlesForResponse = Object.values(fetchedRecords).map(vec => ({
-            id: vec.id,
-            content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
-            penjelasan: vec.metadata?.penjelasan as string ?? '',
-        }));
+        // HANYA fetch dari Pinecone jika LLM memberikan ID artikel
+        if (articleIds.length > 0) {
+            const fetchResponse = await index.fetch(articleIds);
+            const fetchedRecords = fetchResponse.records ?? {};
 
+            articlesForResponse = Object.values(fetchedRecords).map(vec => ({
+                id: vec.id,
+                content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
+                penjelasan: vec.metadata?.penjelasan as string ?? '',
+            }));
+        }
 
         const finalResponse: z.infer<typeof finalResponseSchema> = {
             articles: articlesForResponse,
