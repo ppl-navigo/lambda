@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         // b) Sparse search (Elasticsearch)
         let sparseResults: any[] = [];
         try {
-            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_bm25/_search", {
+            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", {
                 query: { match: { content: query } },
                 size: 5
             });
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
                 id: m.id,
                 score: m.score,
                 source: 'dense',
-                content: m.metadata?.text || ''
+                content: m.metadata?.content || ''
             })),
             ...sparseResults.map(h => ({
                 id: h._source.pasal,
@@ -107,6 +107,19 @@ export async function POST(req: Request) {
             }))
         ];
         console.log(`[DEBUG] Combined context size: ${combinedContext.length}`);
+
+        // --- START: ADD THIS BLOCK FOR DEBUGGING ---
+        console.log("[DEBUG] Top Combined & Scored Results (Truncated):");
+        console.log(
+            combinedContext.slice(0, 10).map(c => ({
+                id: c.id,
+                score: c.score,
+                source: c.source,
+                content: typeof c.content === 'string' ? c.content.substring(0, 100) + '...' : ''
+            }))
+        );
+        // --- END: ADD THIS BLOCK FOR DEBUGGING ---
+
 
         const contextString = combinedContext
             .map(c => `ID: ${c.id}\nContent: ${c.content}\n---`)
@@ -149,7 +162,7 @@ Pertanyaan Pengguna: "${query}"
 `;
 
         const { object: llmResponse } = await generateObject({
-            model: google("gemini-2.0-flash-exp"),
+            model: google("gemini-2.0-flash"),
             prompt: systemPrompt,
             schema: llmResponseSchema,
         });
