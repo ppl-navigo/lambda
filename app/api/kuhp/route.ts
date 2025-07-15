@@ -20,7 +20,7 @@ export async function OPTIONS() {
 const llmResponseSchema = z.object({
     articles: z.array(z.object({
         id: z.string().describe("Nomor pasal yang paling relevan, format 'Pasal [nomor]'. Contoh: 'Pasal 480'."),
-    })).describe("Daftar pasal yang paling relevan dengan pertanyaan pengguna, maksimal 3."),
+    })).describe("Daftar pasal yang paling relevan dengan pertanyaan pengguna, maksimal 5."),
     summary: z.string().describe("Jawaban ringkas dan langsung untuk pertanyaan pengguna."),
     is_irrelevant: z.boolean().describe("Setel ke true HANYA jika pertanyaan pengguna sama sekali tidak berhubungan dengan hukum atau KUHP."),
     is_direct_request: z.boolean().describe("Setel ke true jika pengguna secara spesifik meminta isi dari satu pasal tertentu (contoh: 'isi pasal 123')."),
@@ -143,7 +143,7 @@ Anda adalah Asisten Hukum AI yang ahli dalam UU No. 1 Tahun 2023. Tugas Anda ada
     * \`Identifikasi Pasal Relevan (LOGIKA BERTINGKAT)\`: Anda harus mengikuti logika ini secara berurutan untuk memastikan akurasi maksimal untuk semua jenis pertanyaan.
          1.  **Prioritas #1: Kecocokan Kata Kunci Langsung (Literal Match)**: Pertama, periksa apakah kata kunci dari pertanyaan pengguna (misalnya "data", "kekerasan", atau frasa "waktu tindak pidana") muncul **persis sama** di dalam \`content\` dari konteks yang diberikan. Jika Anda menemukan kecocokan langsung seperti ini, **Anda WAJIB memasukkan ID pasal tersebut** ke dalam array \`articles\`. Ini adalah prioritas tertinggi.
          2.  **Prioritas #2: Kecocokan Konseptual (Conceptual Match)**: Setelah itu, atau jika tidak ada kecocokan langsung, perluas pencarian Anda untuk menemukan pasal yang paling relevan secara **konsep**. Contoh: pertanyaan "hukumnya mukul orang" secara konsep relevan dengan pasal tentang "penganiayaan". Jika Anda menemukan pasal yang relevan secara konsep, masukkan juga ID-nya ke \`articles\`.
-         3.  **Aturan Final**: Gabungkan hasil dari kedua prioritas (utamakan kecocokan langsung, lalu konseptual, maksimal 3 pasal). Yang paling penting, **JANGAN PERNAH MENGEMBALIKAN ARRAY \`articles\` YANG KOSONG** jika ada *setidaknya satu* pasal dalam konteks yang relevan (baik secara langsung maupun konseptual). Lebih baik memberikan referensi yang paling mendekati daripada tidak memberikan sama sekali.
+         3.  **Aturan Final**: Gabungkan hasil dari kedua prioritas (utamakan kecocokan langsung, lalu konseptual, maksimal 5 pasal). Yang paling penting, **JANGAN PERNAH MENGEMBALIKAN ARRAY \`articles\` YANG KOSONG** jika ada *setidaknya satu* pasal dalam konteks yang relevan (baik secara langsung maupun konseptual). Lebih baik memberikan referensi yang paling mendekati daripada tidak memberikan sama sekali.
     * **Cek Relevansi**: Setel \`is_irrelevant\` ke \`true\` HANYA JIKA pertanyaan pengguna ("siapa kamu", "resep makanan", atau pernyataan lain yang sangat tidak relevan) DAN konteks yang ditemukan atau kata yang terkandung sama sekali tidak ada hubungannya dengan hukum atau KUHP atau tidak terkandung sama sekali di konteks. Jika salah satu relevan, setel ke \`false\`. Ingat bahwa kamu harus 100% yakin bahwa tidak ada relevansi sama sekali, barulah boleh setel ke true
     * **Buat Ringkasan**: Buat ringkasan jawaban yang jelas. **PENTING: Ringkasan Anda HARUS didasarkan HANYA pada pasal-pasal yang telah Anda pilih dan masukkan ke dalam array \`articles\`.** Sebutkan nomor pasal dari array \`articles\` tersebut dalam ringkasan Anda untuk memberikan konteks pada jawaban.
 
@@ -151,7 +151,7 @@ Anda adalah Asisten Hukum AI yang ahli dalam UU No. 1 Tahun 2023. Tugas Anda ada
 - **Prioritaskan Permintaan Langsung**: Aturan untuk \`is_direct_request\` mengalahkan semua aturan lain.
 - **Output WAJIB JSON**: Selalu kembalikan objek JSON yang valid. Jangan tambahkan \`\`\`json atau teks lain di luar objek.
 - **ID Pasal**: \`id\` harus berupa string dengan format "Pasal [nomor]".
-- **Maksimal 3 Pasal**: Jangan pernah mengembalikan lebih dari 3 pasal dalam array \`articles\`.
+- **Maksimal 5 Pasal**: Jangan pernah mengembalikan lebih dari 5 pasal dalam array \`articles\`.
 - **KONSISTENSI WAJIB**: Jika Anda menyebutkan sebuah nomor pasal (misal: "Pasal 263") di dalam \`summary\`, maka ID pasal tersebut ("Pasal 263") **WAJIB ADA** di dalam array \`articles\`. Jangan pernah menyebut pasal di ringkasan yang tidak ada di daftar \`articles\`.
 - **Fokus pada Relevansi**: Prioritaskan pasal yang paling menjawab pertanyaan. Jika ada satu pasal yang sangat relevan, cukup kembalikan satu itu saja.
 
@@ -244,33 +244,52 @@ Pertanyaan Pengguna: "${query}"
         }
 
 
-        // --- 4. Final Grounding & Formatting ---
-        if ((!llmResponse.articles || llmResponse.articles.length === 0) && !llmResponse.summary) {
-            console.log("[DEBUG] LLM did not return any relevant articles. Providing generic response.");
-             const fallbackResponse = {
-                articles: [],
-                summary: "Maaf, saya tidak dapat menemukan pasal yang relevan dengan pertanyaan Anda saat ini. Mohon coba ajukan pertanyaan dengan lebih spesifik."
-            };
-            return NextResponse.json(fallbackResponse, {
-                headers: { 'Access-Control-Allow-Origin': '*' }
+        // --- 4. Final Grounding, Augmentation & Formatting ---
+
+        // Start with the article IDs selected by the LLM
+        const llmArticleIds = llmResponse.articles.map(a => a.id);
+        console.log(`[DEBUG] IDs selected by LLM: ${llmArticleIds.join(', ')}`);
+
+        let augmentedArticleIds: string[] = [];
+
+        // Fetch up to 20 more articles from Elasticsearch to augment the results
+        try {
+            console.log("[DEBUG] Fetching additional articles from Elasticsearch for augmentation.");
+            const esAugmentRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", {
+                query: { match: { content: query } },
+                size: 20 // Fetch up to 20 additional results
             });
+            augmentedArticleIds = esAugmentRes.data.hits.hits.map((h: any) => h._source.pasal);
+            console.log(`[DEBUG] Fetched ${augmentedArticleIds.length} additional article IDs for augmentation.`);
+        } catch (err) {
+            console.error("[DEBUG] Elasticsearch augmentation query failed:", err);
+            // Continue without augmented results if it fails
         }
 
-        const articleIds = llmResponse.articles.map(a => a.id);
-        console.log(`[DEBUG] IDs selected by LLM: ${articleIds.join(', ')}`);
+        // Combine LLM-selected IDs and augmented IDs, ensuring no duplicates
+        const combinedIds = [...new Set([...llmArticleIds, ...augmentedArticleIds])];
+        console.log(`[DEBUG] Final combined and unique article IDs (${combinedIds.length}): ${combinedIds.join(', ')}`);
 
         let articlesForResponse: z.infer<typeof finalResponseSchema>['articles'] = [];
 
-        // HANYA fetch dari Pinecone jika LLM memberikan ID artikel
-        if (articleIds.length > 0) {
-            const fetchResponse = await index.fetch(articleIds);
+        // Fetch all unique articles from Pinecone if there are any IDs to fetch
+        if (combinedIds.length > 0) {
+            const fetchResponse = await index.fetch(combinedIds);
             const fetchedRecords = fetchResponse.records ?? {};
 
-            articlesForResponse = Object.values(fetchedRecords).map(vec => ({
-                id: vec.id,
-                content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
-                penjelasan: vec.metadata?.penjelasan as string ?? '',
-            }));
+            // Map fetched records to the final response structure
+            // We use the 'combinedIds' array to maintain a consistent order
+            articlesForResponse = combinedIds
+                .map(id => {
+                    const vec = fetchedRecords[id];
+                    if (!vec) return null; // Handle case where an ID might not be found
+                    return {
+                        id: vec.id,
+                        content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
+                        penjelasan: vec.metadata?.penjelasan as string ?? '',
+                    };
+                })
+                .filter((article): article is Exclude<typeof article, null> => article !== null); // Filter out any nulls
         }
 
         const finalResponse: z.infer<typeof finalResponseSchema> = {
