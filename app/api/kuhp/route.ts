@@ -36,6 +36,7 @@ const finalResponseSchema = z.object({
         penjelasan: z.string().optional(),
     })),
     summary: z.string(),
+    totalRelevant: z.number().describe("The total count of unique relevant articles found from dense and sparse searches."),
 });
 
 // Utility function to sanitize LLM's JSON output
@@ -77,12 +78,12 @@ export async function POST(req: Request) {
         console.log(`[DEBUG] Pinecone (Dense) results fetched: ${denseResults.matches.length}`);
 
 
-        // b) Sparse search (Elasticsearch) - Fetch up to 25 results to build a candidate pool
+        // b) Sparse search (Elasticsearch) - Fetch up to 30 results to build a candidate pool
         let sparseResults: any[] = [];
         try {
             const esRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", {
                 query: { match: { content: query } },
-                size: 25 // Fetch up to 25 sparse results
+                size: 500 // Fetch up to 500 sparse results
             });
             sparseResults = esRes.data.hits.hits;
             console.log(`[DEBUG] Elasticsearch (Sparse) results fetched: ${sparseResults.length}`);
@@ -245,12 +246,13 @@ Pertanyaan Pengguna: "${query}"
 
 
         // --- 4. Final Grounding & Formatting ---
-        const MAX_ARTICLES = 25;
+        const MAX_ARTICLES = 30;
 
         // Get IDs from all sources
         const llmArticleIds = llmResponse.articles.map(a => a.id);
         const denseIds = denseResults.matches.map(m => m.id);
         const sparseIds = sparseResults.map(h => h._source.pasal);
+        const totalRelevantCount = new Set([...denseIds, ...sparseIds]).size;
 
         // Combine IDs: Prioritize LLM selection, then dense results, then fill with sparse results.
         // Use a Set to handle uniqueness while respecting the initial insertion order.
@@ -291,6 +293,7 @@ Pertanyaan Pengguna: "${query}"
         const finalResponse: z.infer<typeof finalResponseSchema> = {
             articles: articlesForResponse,
             summary: llmResponse.summary,
+            totalRelevant: totalRelevantCount,
         };
 
         return NextResponse.json(finalResponse, {
