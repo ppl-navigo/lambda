@@ -78,15 +78,23 @@ export async function POST(req: Request) {
         console.log(`[DEBUG] Pinecone (Dense) results fetched: ${denseResults.matches.length}`);
 
 
-        // b) Sparse search (Elasticsearch) - Fetch up to 30 results to build a candidate pool
+        // [NEW] Dynamically build the Elasticsearch query based on user input
+        const isPhrase = query.trim().includes(' ');
+        const esQuery = {
+            query: {
+                [isPhrase ? 'match_phrase' : 'match']: {
+                    content: query
+                }
+            },
+            size: 500 // Fetch up to 500 sparse results
+        };
+
+        // b) Sparse search (Elasticsearch) - Use the dynamic query
         let sparseResults: any[] = [];
         try {
-            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", {
-                query: { match: { content: query } },
-                size: 500 // Fetch up to 500 sparse results
-            });
+            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", esQuery);
             sparseResults = esRes.data.hits.hits;
-            console.log(`[DEBUG] Elasticsearch (Sparse) results fetched: ${sparseResults.length}`);
+            console.log(`[DEBUG] Elasticsearch (Sparse) results fetched: ${sparseResults.length} using '${isPhrase ? 'match_phrase' : 'match'}'`);
         } catch (err) {
             console.error("[DEBUG] Elasticsearch query failed:", err);
             // Continue without sparse results if it fails
@@ -246,7 +254,7 @@ Pertanyaan Pengguna: "${query}"
 
 
         // --- 4. Final Grounding & Formatting ---
-        const MAX_ARTICLES = 30;
+        const MAX_ARTICLES = 23;
 
         // Get IDs from all sources
         const llmArticleIds = llmResponse.articles.map(a => a.id);
