@@ -246,7 +246,7 @@ Pertanyaan Pengguna: "${query}"
 
 
         // --- 4. Final Grounding & Formatting ---
-        const MAX_ARTICLES = 30;
+        const MAX_ARTICLES = 23;
 
         // Get IDs from all sources
         const llmArticleIds = llmResponse.articles.map(a => a.id);
