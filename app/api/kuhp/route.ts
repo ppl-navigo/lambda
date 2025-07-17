@@ -77,41 +77,41 @@ export async function POST(req: Request) {
         console.log(`[DEBUG] Pinecone (Dense) results fetched: ${denseResults.matches.length}`);
 
 
-        // b) Sparse search (Elasticsearch)
+        // b) Sparse search (Elasticsearch) - Fetch up to 25 results to build a candidate pool
         let sparseResults: any[] = [];
         try {
-            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", {
-                query: { match: { content: query } },
-                size: 5
-            });
-            sparseResults = esRes.data.hits.hits;
-            console.log(`[DEBUG] Elasticsearch (Sparse) results fetched: ${sparseResults.length}`);
+            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", {
+                query: { match: { content: query } },
+                size: 25 // Fetch up to 25 sparse results
+            });
+            sparseResults = esRes.data.hits.hits;
+            console.log(`[DEBUG] Elasticsearch (Sparse) results fetched: ${sparseResults.length}`);
         } catch (err) {
             console.error("[DEBUG] Elasticsearch query failed:", err);
             // Continue without sparse results if it fails
         }
 
-        // c) Combine and format context
-        const combinedContext = [
-            ...denseResults.matches.map(m => ({
+        // c) Combine and format context for the LLM (using top 5 from each for a concise prompt)
+        const contextForLlm = [
+                ...denseResults.matches.slice(0, 5).map(m => ({
                 id: m.id,
                 score: m.score,
                 source: 'dense',
                 content: m.metadata?.content || ''
             })),
-            ...sparseResults.map(h => ({
+            ...sparseResults.slice(0, 5).map(h => ({
                 id: h._source.pasal,
                 score: h._score,
                 source: 'sparse',
                 content: `${h._source.pasal}: ${h._source.content}`
             }))
         ];
-        console.log(`[DEBUG] Combined context size: ${combinedContext.length}`);
+        console.log(`[DEBUG] Combined context size for LLM: ${contextForLlm.length}`);
 
         // --- START: ADD THIS BLOCK FOR DEBUGGING ---
         console.log("[DEBUG] Top Combined & Scored Results (Truncated):");
         console.log(
-            combinedContext.slice(0, 10).map(c => ({
+            contextForLlm.slice(0, 10).map(c => ({
                 id: c.id,
                 score: c.score,
                 source: c.source,
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
         // --- END: ADD THIS BLOCK FOR DEBUGGING ---
 
 
-        const contextString = combinedContext
+        const contextString = contextForLlm
             .map(c => `ID: ${c.id}\nContent: ${c.content}\n---`)
             .join('\n\n');
 
@@ -244,31 +244,27 @@ Pertanyaan Pengguna: "${query}"
         }
 
 
-        // --- 4. Final Grounding, Augmentation & Formatting ---
+        // --- 4. Final Grounding & Formatting ---
+        const MAX_ARTICLES = 25;
 
-        // Start with the article IDs selected by the LLM
+        // Get IDs from all sources
         const llmArticleIds = llmResponse.articles.map(a => a.id);
+        const denseIds = denseResults.matches.map(m => m.id);
+        const sparseIds = sparseResults.map(h => h._source.pasal);
+
+        // Combine IDs: Prioritize LLM selection, then dense results, then fill with sparse results.
+        // Use a Set to handle uniqueness while respecting the initial insertion order.
+        const prioritizedIds = new Set([
+            ...llmArticleIds,
+            ...denseIds,
+            ...sparseIds
+        ]);
+
+        // Convert Set to array and limit to MAX_ARTICLES
+        const combinedIds = Array.from(prioritizedIds).slice(0, MAX_ARTICLES);
+ 
         console.log(`[DEBUG] IDs selected by LLM: ${llmArticleIds.join(', ')}`);
-
-        let augmentedArticleIds: string[] = [];
-
-        // Fetch up to 20 more articles from Elasticsearch to augment the results
-        try {
-            console.log("[DEBUG] Fetching additional articles from Elasticsearch for augmentation.");
-            const esAugmentRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", {
-                query: { match: { content: query } },
-                size: 20 // Fetch up to 20 additional results
-            });
-            augmentedArticleIds = esAugmentRes.data.hits.hits.map((h: any) => h._source.pasal);
-            console.log(`[DEBUG] Fetched ${augmentedArticleIds.length} additional article IDs for augmentation.`);
-        } catch (err) {
-            console.error("[DEBUG] Elasticsearch augmentation query failed:", err);
-            // Continue without augmented results if it fails
-        }
-
-        // Combine LLM-selected IDs and augmented IDs, ensuring no duplicates
-        const combinedIds = [...new Set([...llmArticleIds, ...augmentedArticleIds])];
-        console.log(`[DEBUG] Final combined and unique article IDs (${combinedIds.length}): ${combinedIds.join(', ')}`);
+        console.log(`[DEBUG] Final combined and unique article IDs to fetch (${combinedIds.length}): ${combinedIds.join(', ')}`);
 
         let articlesForResponse: z.infer<typeof finalResponseSchema>['articles'] = [];
 
