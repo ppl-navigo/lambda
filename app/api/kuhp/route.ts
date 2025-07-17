@@ -260,13 +260,12 @@ Pertanyaan Pengguna: "${query}"
         const llmArticleIds = llmResponse.articles.map(a => a.id);
         const denseIds = denseResults.matches.map(m => m.id);
         const sparseIds = sparseResults.map(h => h._source.pasal);
-        const totalRelevantCount = new Set([...denseIds, ...sparseIds]).size;
+        const totalRelevantCount = new Set([...llmArticleIds, ...sparseIds]).size;
 
         // Combine IDs: Prioritize LLM selection, then dense results, then fill with sparse results.
         // Use a Set to handle uniqueness while respecting the initial insertion order.
         const prioritizedIds = new Set([
             ...llmArticleIds,
-            ...denseIds,
             ...sparseIds
         ]);
 
