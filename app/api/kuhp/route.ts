@@ -266,6 +266,7 @@ Pertanyaan Pengguna: "${query}"
         // Use a Set to handle uniqueness while respecting the initial insertion order.
         const prioritizedIds = new Set([
             ...llmArticleIds,
+            ...denseIds,
             ...sparseIds
         ]);
 
