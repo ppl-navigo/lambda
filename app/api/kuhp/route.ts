@@ -34,6 +34,7 @@ const finalResponseSchema = z.object({
         id: z.string(),
         content: z.string(),
         penjelasan: z.string().optional(),
+        score: z.number().optional().describe("The relevance score from the search."),
     })),
     summary: z.string(),
     totalRelevant: z.number().describe("The total count of unique relevant articles found from dense and sparse searches."),
@@ -254,25 +255,31 @@ Pertanyaan Pengguna: "${query}"
 
 
         // --- 4. Final Grounding & Formatting ---
-        const MAX_ARTICLES = 23;
+        const llmArticleIds = new Set(llmResponse.articles.map(a => a.id));
+        const sparseArticles = sparseResults.map(h => ({
+            id: h._source.pasal,
+            score: h._score
+        }));
+        const totalRelevantCount = new Set(sparseArticles.map(a => a.id)).size;
 
-        // Get IDs from all sources
-        const llmArticleIds = llmResponse.articles.map(a => a.id);
-        const denseIds = denseResults.matches.map(m => m.id);
-        const sparseIds = sparseResults.map(h => h._source.pasal);
-        const totalRelevantCount = new Set([...llmArticleIds, ...sparseIds]).size;
+        // Prioritize and Sort Articles:
+        // 1. Give top priority to articles selected by the LLM.
+        // 2. Sort the rest by their Elasticsearch score in descending order.
+        const prioritizedArticles = sparseArticles.sort((a, b) => {
+            const aIsLlmChoice = llmArticleIds.has(a.id);
+            const bIsLlmChoice = llmArticleIds.has(b.id);
 
-        // Combine IDs: Prioritize LLM selection, then dense results, then fill with sparse results.
-        // Use a Set to handle uniqueness while respecting the initial insertion order.
-        const prioritizedIds = new Set([
-            ...llmArticleIds,
-            ...sparseIds
-        ]);
+            if (aIsLlmChoice && !bIsLlmChoice) return -1; // a comes first
+            if (!aIsLlmChoice && bIsLlmChoice) return 1;  // b comes first
+            
+            // If both are (or are not) LLM choices, sort by score
+            return (b.score ?? 0) - (a.score ?? 0);
+        });
 
-        // Convert Set to array and limit to MAX_ARTICLES
-        const combinedIds = Array.from(prioritizedIds).slice(0, MAX_ARTICLES);
- 
-        console.log(`[DEBUG] IDs selected by LLM: ${llmArticleIds.join(', ')}`);
+        // [REVISED] We now fetch all relevant articles, no limit.
+        const combinedIds = prioritizedArticles.map(a => a.id);
+
+        console.log(`[DEBUG] IDs selected by LLM: ${Array.from(llmArticleIds).join(', ')}`);
         console.log(`[DEBUG] Final combined and unique article IDs to fetch (${combinedIds.length}): ${combinedIds.join(', ')}`);
 
         let articlesForResponse: z.infer<typeof finalResponseSchema>['articles'] = [];
@@ -281,6 +288,7 @@ Pertanyaan Pengguna: "${query}"
         if (combinedIds.length > 0) {
             const fetchResponse = await index.fetch(combinedIds);
             const fetchedRecords = fetchResponse.records ?? {};
+            const sparseScoreMap = new Map(prioritizedArticles.map(p => [p.id, p.score]));
 
             // Map fetched records to the final response structure
             // We use the 'combinedIds' array to maintain a consistent order
@@ -292,6 +300,7 @@ Pertanyaan Pengguna: "${query}"
                         id: vec.id,
                         content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
                         penjelasan: vec.metadata?.penjelasan as string ?? '',
+                        score: sparseScoreMap.get(id) ?? 0,
                     };
                 })
                 .filter((article): article is Exclude<typeof article, null> => article !== null); // Filter out any nulls
