@@ -4,6 +4,7 @@ import { embed, generateObject } from 'ai';
 import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import https from 'https';
 
 // Allow responses to take up to 60 seconds
 export const maxDuration = 60;
@@ -69,7 +70,24 @@ export async function POST(req: Request) {
 
         let sparseResults: any[] = [];
         try {
-            const esRes = await axios.post("https://search.litsindonesia.com/kuhp_merged/_search", esQuery);
+            // This agent is needed to bypass SSL verification, like curl's -k flag
+            const httpsAgent = new https.Agent({
+              rejectUnauthorized: false,
+            });
+
+            const esRes = await axios.post(
+              "https://nozomi.proxy.rlwy.net:44468/kuhp_merged/_search", // Your new Railway Proxy URL
+              esQuery, 
+              {
+                timeout: 5000,
+                // Add authentication with your username and password
+                auth: {
+                  username: "elastic",
+                  password: "MySecureP@ssw0rd!2025" // Use the password from your successful curl command
+                },
+                httpsAgent, // Use the agent to handle the proxy's SSL
+              }
+            );
             sparseResults = esRes.data.hits.hits;
         } catch (err) { console.error("[DEBUG] Elasticsearch query failed:", err); }
 
@@ -80,7 +98,15 @@ export async function POST(req: Request) {
         ];
         const uniqueContext = Array.from(new Map(contextForLlm.map(item => [item.id, item])).values());
         const contextString = uniqueContext.map(c => `ID: ${c.id}\nContent: ${c.content}\n---`).join('\n\n');
-
+        
+        // If both Pinecone and Elasticsearch return no results, return a specific message early.
+        if (uniqueContext.length === 0) {
+            console.log("[DEBUG] No context found from any retrieval source. Returning early.");
+            return NextResponse.json({
+                articles: [],
+                summary: "Maaf, terjadi kendala saat mencari data atau tidak ada pasal yang relevan dengan pencarian Anda. Mohon coba lagi dengan kata kunci yang berbeda."
+            });
+        }
         // --- 2. LLM Processing Step (Select prompt based on type) ---
         const proSystemPrompt = `
 # PERAN & TUJUAN
