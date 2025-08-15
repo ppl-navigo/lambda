@@ -83,7 +83,7 @@ export async function POST(req: Request) {
         console.log('[DEBUG] Dense search results:', JSON.stringify(truncatedDense, null, 2));
 
 
-        const esQuery = { query: { match: { content: query } }, size: type === 'pro' ? 10 : 10 };
+        const esQuery = { query: { match: { content: query } }, size: type === 'pro' ? 100 : 10 };
 
         let sparseResults: any[] = [];
         try {
@@ -124,7 +124,9 @@ export async function POST(req: Request) {
         }));
         console.log('[DEBUG] Combined and unique context for LLM:', JSON.stringify(truncatedUniqueContext, null, 2));
 
-        const contextString = uniqueContext.map(c => `ID: ${c.id}\nContent: ${c.content}\n---`).join('\n\n');
+        // Create a limited context for the LLM prompt, but keep the full context for the final response
+        const limitedContextForLlm = uniqueContext.slice(0, 10);
+        const contextString = limitedContextForLlm.map(c => `ID: ${c.id}\nContent: ${c.content}\n---`).join('\n\n');
         
         // If both Pinecone and Elasticsearch return no results, return a specific message early.
         if (uniqueContext.length === 0) {
@@ -237,9 +239,15 @@ Pertanyaan Pengguna: "${query}"`;
         if (type === 'pro') {
             // Your original grounding logic for 'pro'
             const llmArticleIds = new Set(llmResponse.articles.map(a => a.id));
-            const sparseArticles = sparseResults.map(h => ({ id: h._source.pasal, score: h._score }));
-            const totalRelevantCount = new Set(sparseArticles.map(a => a.id)).size;
-            const prioritizedArticles = sparseArticles.sort((a, b) => {
+            // **IMPROVEMENT**: Use the full unique context, not just sparse results
+            const sparseScoreMap = new Map(sparseResults.map(h => [h._source.pasal, h._score]));
+            const allFoundArticles = uniqueContext.map(item => ({
+                id: item.id,
+                score: sparseScoreMap.get(item.id) || 0 // Use sparse score if available
+            }));
+
+            const totalRelevantCount = allFoundArticles.length;
+            const prioritizedArticles = allFoundArticles.sort((a, b) => {
                 const aIsLlmChoice = llmArticleIds.has(a.id);
                 const bIsLlmChoice = llmArticleIds.has(b.id);
                 if (aIsLlmChoice && !bIsLlmChoice) return -1;
@@ -252,7 +260,6 @@ Pertanyaan Pengguna: "${query}"`;
             if (combinedIds.length > 0) {
                 const fetchResponse = await index.fetch(combinedIds);
                 const fetchedRecords = fetchResponse.records ?? {};
-                const sparseScoreMap = new Map(prioritizedArticles.map(p => [p.id, p.score]));
                 articlesForResponse = combinedIds.map(id => {
                     const vec = fetchedRecords[id];
                     if (!vec) return null;
