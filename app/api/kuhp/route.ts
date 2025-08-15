@@ -62,11 +62,28 @@ export async function POST(req: Request) {
         console.log(`[DEBUG] Received query: "${query}" for type: "${type}"`);
 
         // --- 1. Hybrid Retrieval Step (Common for both modes) ---
-        const { embedding } = await embed({ model: google.textEmbeddingModel("text-embedding-004"), value: query });
-        const denseResults = await index.query({ vector: embedding, topK: type === 'pro' ? 5 : 10, includeMetadata: true });
+        let denseResults: { matches: any[] } = { matches: [] }; // Default value
+        try {
+            const { embedding } = await embed({ model: google.textEmbeddingModel("text-embedding-004"), value: query });
+            denseResults = await index.query({ vector: embedding, topK: type === 'pro' ? 10 : 10, includeMetadata: true });
+        } catch (err) {
+            console.warn("[WARN] Pinecone query failed, proceeding with sparse search results only.", err);
+        }
+        
+        // Truncate content for cleaner logs
+        const truncatedDense = denseResults.matches.map(m => ({
+            ...m,
+            metadata: {
+                ...m.metadata,
+                content: typeof m.metadata?.content === 'string'
+                    ? `${m.metadata.content.substring(0, 100)}...`
+                    : String(m.metadata?.content)
+            }
+        }));
+        console.log('[DEBUG] Dense search results:', JSON.stringify(truncatedDense, null, 2));
 
-        const isPhrase = query.trim().includes(' ');
-        const esQuery = { query: { [isPhrase ? 'match_phrase' : 'match']: { content: query } }, size: type === 'pro' ? 500 : 10 };
+
+        const esQuery = { query: { match: { content: query } }, size: type === 'pro' ? 10 : 10 };
 
         let sparseResults: any[] = [];
         try {
@@ -90,6 +107,9 @@ export async function POST(req: Request) {
             );
             sparseResults = esRes.data.hits.hits;
         } catch (err) { console.error("[DEBUG] Elasticsearch query failed:", err); }
+        // Truncate content for cleaner logs
+        const truncatedSparse = sparseResults.map(h => ({ ...h, _source: { ...h._source, content: `${h._source?.content?.substring(0, 100)}...` } }));
+        console.log('[DEBUG] Sparse search results:', JSON.stringify(truncatedSparse, null, 2));
 
         // Combine and create a unique context for the LLM
         const contextForLlm = [
@@ -97,6 +117,13 @@ export async function POST(req: Request) {
             ...sparseResults.map(h => ({ id: h._source.pasal, content: `${h._source.pasal}: ${h._source.content}` }))
         ];
         const uniqueContext = Array.from(new Map(contextForLlm.map(item => [item.id, item])).values());
+        // Truncate content for cleaner logs
+        const truncatedUniqueContext = uniqueContext.map(item => ({
+            ...item,
+            content: `${String(item.content).substring(0, 150)}...`
+        }));
+        console.log('[DEBUG] Combined and unique context for LLM:', JSON.stringify(truncatedUniqueContext, null, 2));
+
         const contextString = uniqueContext.map(c => `ID: ${c.id}\nContent: ${c.content}\n---`).join('\n\n');
         
         // If both Pinecone and Elasticsearch return no results, return a specific message early.
@@ -148,12 +175,12 @@ Pertanyaan Pengguna: "${query}"`;
 # PERAN & TUJUAN
 Anda adalah Asisten Hukum AI yang ramah dan ahli dalam KUHP (UU No. 1 Tahun 2023) untuk masyarakat umum.
 # ALUR KERJA
-1.  **CEK PERMINTAAN LANGSUNG (PALING PENTING!)**: Pertama, periksa apakah pengguna meminta isi pasal tertentu secara langsung. Ini bisa untuk satu atau LEBIH pasal (contoh: "jelaskan pasal 480 dan 481", "isi KUHP nomor 5 dan 10").
-    * **JIKA YA**: Setel \`is_direct_request\` ke \`true\`. Ekstrak SEMUA nomor pasal yang diminta dan letakkan dalam format 'Pasal [nomor]' di array \`direct_pasal_ids\`. Biarkan \`articles\` kosong. Buat ringkasan seperti "Tentu, berikut adalah isi dari pasal yang Anda minta:".
-    * **JIKA TIDAK**: Lanjutkan ke alur kerja normal. Setel \`is_direct_request\` ke \`false\` dan \`direct_pasal_ids\` biarkan kosong.
+1.  **Analisis Jenis Pertanyaan (PALING PENTING!)**:
+    * **Apakah ini Permintaan Langsung?** Cek apakah pengguna meminta pasal **spesifik dengan menyebutkan NOMORnya**. Contoh: "jelaskan pasal 480", "isi KUHP 5 dan 10". JIKA YA, setel \`is_direct_request\` ke \`true\`, ekstrak nomornya ke \`direct_pasal_ids\`, dan gunakan ringkasan "Tentu, berikut adalah isi dari pasal yang Anda minta:".
+    * **Apakah ini Pertanyaan Konseptual?** Jika pengguna bertanya tentang sebuah topik tanpa menyebut nomor pasal (contoh: "hukuman pencurian", "apa itu makar?"), ini **BUKAN** permintaan langsung. JIKA YA, setel \`is_direct_request\` ke \`false\` dan lanjutkan ke Alur Kerja Normal.
 2.  **Alur Kerja Normal (Untuk Pertanyaan Natural)**:
-    * **IDENTIFIKASI PASAL RELEVAN**: Dari konteks, pilih semua pasal yang paling penting dan relevan yang menjawab pertanyaan pengguna. Masukkan ID-nya ke \`articles\`. Jika tidak ada yang relevan sama sekali, kembalikan array \`articles\` yang kosong.
-    * **BUAT RINGKASAN KOMPREHENSIF**: Tuliskan ringkasan jawaban yang lengkap, jelas, dan langsung dengan bahasa sederhana. Jelaskan konsep hukumnya dan sebutkan secara eksplisit pasal-pasal dari array \`articles\` yang menjadi dasar jawaban Anda. Jika \`articles\` kosong, jelaskan bahwa tidak ditemukan pasal yang sesuai.
+    * **IDENTIFIKASI PASAL RELEVAN**: Dari KONTEKS PENCARIAN, pilih 3-5 pasal yang paling relevan. **ANDA WAJIB MEMASUKKAN ID PASAL-PASAL INI** ke dalam array \`articles\`. Jangan biarkan array ini kosong jika Anda menemukan konteks yang relevan.
+    * **BUAT RINGKASAN KONSEP**: Berdasarkan pasal yang Anda pilih di \`articles\`, tulis ringkasan yang menjelaskan konsep hukumnya dalam bahasa sederhana. **WAJIB sebutkan secara eksplisit nomor pasal** tersebut di dalam ringkasan Anda (contoh: "Menurut Pasal 476, ...").
     * **CEK RELEVANSI**: Setel \`is_irrelevant\` ke \`true\` HANYA JIKA pertanyaan sama sekali tidak berhubungan dengan hukum.
 # ATURAN KETAT
 - **Prioritaskan Permintaan Langsung**.
