@@ -63,12 +63,12 @@ export async function POST(req: Request) {
 
         // --- 1. Hybrid Retrieval Step (Common for both modes) ---
         let denseResults: { matches: any[] } = { matches: [] }; // Default value
-        try {
-            const { embedding } = await embed({ model: google.textEmbeddingModel("text-embedding-004"), value: query });
-            denseResults = await index.query({ vector: embedding, topK: type === 'pro' ? 10 : 10, includeMetadata: true });
-        } catch (err) {
-            console.warn("[WARN] Pinecone query failed, proceeding with sparse search results only.", err);
-        }
+        try {
+            const { embedding } = await embed({ model: google.textEmbeddingModel("text-embedding-004"), value: query });
+            denseResults = await index.query({ vector: embedding, topK: 10, includeMetadata: true });
+        } catch (err) {
+            console.warn("[WARN] Pinecone query failed, proceeding with sparse search results only.", err);
+        }
         
         // Truncate content for cleaner logs
         const truncatedDense = denseResults.matches.map(m => ({
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
         console.log('[DEBUG] Dense search results:', JSON.stringify(truncatedDense, null, 2));
 
 
-        const esQuery = { query: { match: { content: query } }, size: type === 'pro' ? 100 : 10 };
+        const esQuery = { query: { match: { content: query } }, size: 10 };
 
         let sparseResults: any[] = [];
         try {
@@ -112,9 +112,10 @@ export async function POST(req: Request) {
         console.log('[DEBUG] Sparse search results:', JSON.stringify(truncatedSparse, null, 2));
 
         // Combine and create a unique context for the LLM
+        const sparseForLlm = sparseResults.slice(0, 10);
         const contextForLlm = [
             ...denseResults.matches.map(m => ({ id: m.id, content: m.metadata?.content || '' })),
-            ...sparseResults.map(h => ({ id: h._source.pasal, content: `${h._source.pasal}: ${h._source.content}` }))
+            ...sparseForLlm.map(h => ({ id: h._source.pasal, content: `${h._source.pasal}: ${h._source.content}` }))
         ];
         const uniqueContext = Array.from(new Map(contextForLlm.map(item => [item.id, item])).values());
         // Truncate content for cleaner logs
@@ -124,9 +125,7 @@ export async function POST(req: Request) {
         }));
         console.log('[DEBUG] Combined and unique context for LLM:', JSON.stringify(truncatedUniqueContext, null, 2));
 
-        // Create a limited context for the LLM prompt, but keep the full context for the final response
-        const limitedContextForLlm = uniqueContext.slice(0, 10);
-        const contextString = limitedContextForLlm.map(c => `ID: ${c.id}\nContent: ${c.content}\n---`).join('\n\n');
+        const contextString = uniqueContext.map(c => `ID: ${c.id}\nContent: ${c.content}\n---`).join('\n\n');
         
         // If both Pinecone and Elasticsearch return no results, return a specific message early.
         if (uniqueContext.length === 0) {
@@ -182,7 +181,7 @@ Anda adalah Asisten Hukum AI yang ramah dan ahli dalam KUHP (UU No. 1 Tahun 2023
     * **Apakah ini Pertanyaan Konseptual?** Jika pengguna bertanya tentang sebuah topik tanpa menyebut nomor pasal (contoh: "hukuman pencurian", "apa itu makar?"), ini **BUKAN** permintaan langsung. JIKA YA, setel \`is_direct_request\` ke \`false\` dan lanjutkan ke Alur Kerja Normal.
 2.  **Alur Kerja Normal (Untuk Pertanyaan Natural)**:
     * **IDENTIFIKASI PASAL RELEVAN**: Dari KONTEKS PENCARIAN, pilih 3-5 pasal yang paling relevan. **ANDA WAJIB MEMASUKKAN ID PASAL-PASAL INI** ke dalam array \`articles\`. Jangan biarkan array ini kosong jika Anda menemukan konteks yang relevan.
-    * **BUAT RINGKASAN KONSEP**: Berdasarkan pasal yang Anda pilih di \`articles\`, tulis ringkasan yang menjelaskan konsep hukumnya dalam bahasa sederhana. **WAJIB sebutkan secara eksplisit nomor pasal** tersebut di dalam ringkasan Anda (contoh: "Menurut Pasal 476, ...").
+    * **BUAT RINGKASAN KONSEP**: Berdasarkan pasal yang Anda pilih di \`articles\`, tulis ringkasan yang menjelaskan konsep hukumnya dalam bahasa sederhana. **WAJIB sebutkan secara eksplisit nomor pasal** tersebut di dalam ringkasan Anda (contoh: "Menurut Pasal 476, ...").
     * **CEK RELEVANSI**: Setel \`is_irrelevant\` ke \`true\` HANYA JIKA pertanyaan sama sekali tidak berhubungan dengan hukum.
 # ATURAN KETAT
 - **Prioritaskan Permintaan Langsung**.
@@ -237,36 +236,61 @@ Pertanyaan Pengguna: "${query}"`;
 
         // --- 4. Final Grounding & Formatting ---
         if (type === 'pro') {
-            // Your original grounding logic for 'pro'
-            const llmArticleIds = new Set(llmResponse.articles.map(a => a.id));
-            // **IMPROVEMENT**: Use the full unique context, not just sparse results
-            const sparseScoreMap = new Map(sparseResults.map(h => [h._source.pasal, h._score]));
-            const allFoundArticles = uniqueContext.map(item => ({
-                id: item.id,
-                score: sparseScoreMap.get(item.id) || 0 // Use sparse score if available
-            }));
+            // Pro Flow: Combine LLM selection with a new, more precise "exact match" search.
+            console.log('[DEBUG] Starting PRO flow: Combining LLM selection with a new exact match search.');
 
-            const totalRelevantCount = allFoundArticles.length;
-            const prioritizedArticles = allFoundArticles.sort((a, b) => {
-                const aIsLlmChoice = llmArticleIds.has(a.id);
-                const bIsLlmChoice = llmArticleIds.has(b.id);
-                if (aIsLlmChoice && !bIsLlmChoice) return -1;
-                if (!aIsLlmChoice && bIsLlmChoice) return 1;
-                return (b.score ?? 0) - (a.score ?? 0);
-            });
-            const combinedIds = prioritizedArticles.map(a => a.id);
+            // a) Get the article IDs selected by the LLM from the initial context.
+            const llmArticleIds = llmResponse.articles.map(a => a.id);
+            console.log(`[DEBUG] PRO LLM selected IDs:`, llmArticleIds);
 
+            // b) Perform a second, more precise "exact match" (match_phrase) search on Elasticsearch.
+            const exactMatchEsQuery = { query: { match_phrase: { content: query } }, size: 100 };
+            let exactMatchResults: any[] = [];
+            try {
+                const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+                const esRes = await axios.post(
+                    "https://nozomi.proxy.rlwy.net:44468/kuhp_merged/_search",
+                    exactMatchEsQuery,
+                    {
+                        timeout: 5000,
+                        auth: { username: "elastic", password: "MySecureP@ssw0rd!2025" },
+                        httpsAgent,
+                    }
+                );
+                exactMatchResults = esRes.data.hits.hits;
+                console.log(`[DEBUG] PRO Exact match search found ${exactMatchResults.length} results.`);
+            } catch (err) {
+                console.error("[DEBUG] PRO flow Elasticsearch exact match query failed:", err);
+            }
+            const exactMatchIds = exactMatchResults.map(h => h._source.pasal);
+
+            // c) Combine IDs from the LLM selection and the exact match search, ensuring they are unique.
+            const combinedIds = [...new Set([...llmArticleIds, ...exactMatchIds])];
+            console.log(`[DEBUG] PRO Combined unique IDs for fetching:`, combinedIds);
+
+            // d) Fetch the full data for the combined article IDs.
             let articlesForResponse: z.infer<typeof finalResponseSchema>['articles'] = [];
             if (combinedIds.length > 0) {
                 const fetchResponse = await index.fetch(combinedIds);
                 const fetchedRecords = fetchResponse.records ?? {};
+
+                // Create a map of scores from the exact match results to add them to the final output
+                const exactMatchScoreMap = new Map(exactMatchResults.map(h => [h._source.pasal, h._score]));
+
                 articlesForResponse = combinedIds.map(id => {
                     const vec = fetchedRecords[id];
                     if (!vec) return null;
-                    return { id: vec.id, content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.', penjelasan: vec.metadata?.penjelasan as string ?? '', score: sparseScoreMap.get(id) ?? 0 };
+                    return {
+                        id: vec.id,
+                        content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
+                        penjelasan: vec.metadata?.penjelasan as string ?? '',
+                        score: exactMatchScoreMap.get(id) // Assign score if it came from the exact match search
+                    };
                 }).filter((article): article is Exclude<typeof article, null> => article !== null);
             }
-            const finalResponse = { articles: articlesForResponse, summary: llmResponse.summary, totalRelevant: totalRelevantCount };
+
+            // e) Assemble the final response.
+            const finalResponse = { articles: articlesForResponse, summary: llmResponse.summary, totalRelevant: combinedIds.length };
             return NextResponse.json(finalResponse, { headers: { 'Access-Control-Allow-Origin': '*' } });
 
         } else { // 'public' flow
