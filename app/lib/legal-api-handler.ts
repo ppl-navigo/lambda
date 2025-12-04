@@ -113,7 +113,7 @@ export async function handleLegalRequest(req: Request, type: 'kuhp' | 'kuhap') {
 Anda adalah Asisten Hukum AI yang ahli dalam ${lawName}. Tugas Anda adalah menganalisis pertanyaan pengguna dan konteks untuk memberikan jawaban yang akurat.
 # ALUR KERJA
 1.  **CEK PERMINTAAN LANGSUNG**:
-    * **JIKA YA**: Setel \`is_direct_request\` ke \`true\`. Ekstrak SEMUA nomor pasal.
+    * **JIKA YA**: Setel \`is_direct_request\` ke \`true\`. Ekstrak SEMUA nomor pasal (misal: "Pasal 1") MESKIPUN tidak ada dalam KONTEKS.
     * **JIKA TIDAK**: Setel \`is_direct_request\` ke \`false\`.
 2.  **Alur Kerja Normal**:
     * \`Identifikasi Pasal Relevan\`: Cari kecocokan literal dan konseptual. Maksimal 5 pasal.
@@ -135,7 +135,7 @@ Pertanyaan Pengguna: "${query}"`;
 Anda adalah Asisten Hukum AI yang ramah dan ahli dalam ${lawName} untuk masyarakat umum.
 # ALUR KERJA
 1.  **Analisis Jenis Pertanyaan**:
-    * **Permintaan Langsung?** Jika ya, setel \`is_direct_request\` ke \`true\`.
+    * **Permintaan Langsung?** Jika ya, setel \`is_direct_request\` ke \`true\` dan ekstrak nomor pasal MESKIPUN tidak ada dalam KONTEKS.
     * **Pertanyaan Konseptual?** Jika ya, setel \`is_direct_request\` ke \`false\`.
 2.  **Alur Kerja Normal**:
     * **IDENTIFIKASI PASAL RELEVAN**: Pilih 3-5 pasal paling relevan dari KONTEKS.
