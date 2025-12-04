@@ -2,21 +2,25 @@ const fs = require('fs');
 const path = require('path');
 const MiniSearch = require('minisearch');
 
-const KUHP_FILE = path.join(__dirname, 'data_kuhp.json');
-const PENJELASAN_FILE = path.join(__dirname, 'penjelasan_kuhp.json');
-const INDEX_OUTPUT_FILE = path.join(__dirname, 'kuhp-index.json');
+async function generateIndex(type) {
+    console.log(`\n--- Generating Index for ${type.toUpperCase()} ---`);
+    const DATA_FILE = path.join(__dirname, `data_${type}.json`);
+    const PENJELASAN_FILE = path.join(__dirname, `penjelasan_${type}.json`);
+    const INDEX_OUTPUT_FILE = path.join(__dirname, `${type}-index.json`);
 
-async function generateIndex() {
+    if (!fs.existsSync(DATA_FILE) || !fs.existsSync(PENJELASAN_FILE)) {
+        console.error(`❌ Data files for ${type} not found.`);
+        return;
+    }
+
     console.log('Reading data files...');
-    const kuhpData = JSON.parse(fs.readFileSync(KUHP_FILE, 'utf-8'));
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
     const penjelasanData = JSON.parse(fs.readFileSync(PENJELASAN_FILE, 'utf-8'));
 
     const documents = [];
 
-    for (const [pasal, content] of Object.entries(kuhpData)) {
+    for (const [pasal, content] of Object.entries(data)) {
         const penjelasan = penjelasanData[pasal] || '';
-        // Combine content and explanation for better searchability
-        // We keep them separate in the stored fields for display
         documents.push({
             id: pasal,
             pasal: pasal,
@@ -30,10 +34,10 @@ async function generateIndex() {
 
     console.log('Creating MiniSearch index...');
     const miniSearch = new MiniSearch({
-        fields: ['pasal', 'content', 'penjelasan', 'full_text'], // Fields to index for full-text search
-        storeFields: ['pasal', 'content', 'penjelasan'], // Fields to return with search results
+        fields: ['pasal', 'content', 'penjelasan', 'full_text'],
+        storeFields: ['pasal', 'content', 'penjelasan'],
         searchOptions: {
-            boost: { pasal: 2, content: 1.5 }, // Boost matches in 'pasal' and 'content'
+            boost: { pasal: 2, content: 1.5 },
             fuzzy: 0.2
         }
     });
@@ -47,4 +51,9 @@ async function generateIndex() {
     console.log(`✅ Index generated successfully at ${INDEX_OUTPUT_FILE}`);
 }
 
-generateIndex().catch(console.error);
+async function main() {
+    await generateIndex('kuhp');
+    await generateIndex('kuhap');
+}
+
+main().catch(console.error);

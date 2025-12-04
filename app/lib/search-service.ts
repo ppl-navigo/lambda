@@ -2,12 +2,13 @@ import MiniSearch from 'minisearch';
 import fs from 'fs';
 import path from 'path';
 
-let miniSearch: MiniSearch | null = null;
+// Cache for multiple indices
+const indices: Record<string, MiniSearch | null> = {};
 
-const INDEX_FILE_PATH = path.join(process.cwd(), 'scripts', 'kuhp-index.json');
+export const loadIndex = (type: 'kuhp' | 'kuhap') => {
+    if (indices[type]) return indices[type];
 
-export const loadIndex = () => {
-    if (miniSearch) return miniSearch;
+    const INDEX_FILE_PATH = path.join(process.cwd(), 'scripts', `${type}-index.json`);
 
     try {
         console.log(`[SearchService] Loading index from ${INDEX_FILE_PATH}...`);
@@ -17,7 +18,7 @@ export const loadIndex = () => {
         }
 
         const jsonIndex = fs.readFileSync(INDEX_FILE_PATH, 'utf-8');
-        miniSearch = MiniSearch.loadJSON(jsonIndex, {
+        const miniSearch = MiniSearch.loadJSON(jsonIndex, {
             fields: ['pasal', 'content', 'penjelasan', 'full_text'],
             storeFields: ['pasal', 'content', 'penjelasan'],
             searchOptions: {
@@ -25,10 +26,11 @@ export const loadIndex = () => {
                 fuzzy: 0.2
             }
         });
-        console.log('[SearchService] Index loaded successfully.');
+        console.log(`[SearchService] Index for ${type} loaded successfully.`);
+        indices[type] = miniSearch;
         return miniSearch;
     } catch (error) {
-        console.error('[SearchService] Failed to load index:', error);
+        console.error(`[SearchService] Failed to load index for ${type}:`, error);
         return null;
     }
 };
@@ -40,8 +42,8 @@ export interface SearchResult {
     penjelasan?: string;
 }
 
-export const search = (query: string, limit: number = 10): SearchResult[] => {
-    const ms = loadIndex();
+export const search = (query: string, type: 'kuhp' | 'kuhap', limit: number = 10): SearchResult[] => {
+    const ms = loadIndex(type);
     if (!ms) return [];
 
     // Standard search (fuzzy, boosted)
@@ -55,18 +57,11 @@ export const search = (query: string, limit: number = 10): SearchResult[] => {
     }));
 };
 
-export const searchExact = (query: string, limit: number = 100): SearchResult[] => {
-    const ms = loadIndex();
+export const searchExact = (query: string, type: 'kuhp' | 'kuhap', limit: number = 100): SearchResult[] => {
+    const ms = loadIndex(type);
     if (!ms) return [];
 
-    // Exact match search (no fuzziness, must match phrase if possible, but minisearch is token-based)
-    // For "exact phrase" in minisearch, it's a bit different than ES.
-    // We can use the 'combineWith: AND' to ensure all terms are present.
-    // Or we can just rely on high scoring for exact matches.
-    // A true "phrase" search isn't natively supported in the same way as ES 'match_phrase',
-    // but we can approximate it or filter post-search if needed.
-    // For now, we'll use a stricter search configuration.
-
+    // Exact match search
     const results = ms.search(query, {
         fuzzy: false,
         combineWith: 'AND',
