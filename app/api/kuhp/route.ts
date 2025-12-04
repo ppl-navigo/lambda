@@ -1,10 +1,9 @@
 import { index } from '@/utils/pinecone';
 import { google } from '@ai-sdk/google';
 import { embed, generateObject } from 'ai';
-import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import https from 'https';
+import { search, searchExact } from '@/app/lib/search-service';
 
 // Allow responses to take up to 60 seconds
 export const maxDuration = 60;
@@ -69,7 +68,7 @@ export async function POST(req: Request) {
         } catch (err) {
             console.warn("[WARN] Pinecone query failed, proceeding with sparse search results only.", err);
         }
-        
+
         // Truncate content for cleaner logs
         const truncatedDense = denseResults.matches.map(m => ({
             ...m,
@@ -83,39 +82,22 @@ export async function POST(req: Request) {
         console.log('[DEBUG] Dense search results:', JSON.stringify(truncatedDense, null, 2));
 
 
-        const esQuery = { query: { match: { content: query } }, size: 10 };
-
         let sparseResults: any[] = [];
         try {
-            // This agent is needed to bypass SSL verification, like curl's -k flag
-            const httpsAgent = new https.Agent({
-              rejectUnauthorized: false,
-            });
+            // Minisearch replacement
+            sparseResults = search(query, 10);
+        } catch (err) { console.error("[DEBUG] Minisearch query failed:", err); }
 
-            const esRes = await axios.post(
-              "https://nozomi.proxy.rlwy.net:44468/kuhp_merged/_search", // Your new Railway Proxy URL
-              esQuery, 
-              {
-                timeout: 5000,
-                // Add authentication with your username and password
-                auth: {
-                  username: "elastic",
-                  password: "MySecureP@ssw0rd!2025" // Use the password from your successful curl command
-                },
-                httpsAgent, // Use the agent to handle the proxy's SSL
-              }
-            );
-            sparseResults = esRes.data.hits.hits;
-        } catch (err) { console.error("[DEBUG] Elasticsearch query failed:", err); }
         // Truncate content for cleaner logs
-        const truncatedSparse = sparseResults.map(h => ({ ...h, _source: { ...h._source, content: `${h._source?.content?.substring(0, 100)}...` } }));
+        const truncatedSparse = sparseResults.map(h => ({ ...h, content: `${h.content?.substring(0, 100)}...` }));
         console.log('[DEBUG] Sparse search results:', JSON.stringify(truncatedSparse, null, 2));
 
         // Combine and create a unique context for the LLM
+        // Note: Minisearch results structure is slightly different from ES hits
         const sparseForLlm = sparseResults.slice(0, 10);
         const contextForLlm = [
             ...denseResults.matches.map(m => ({ id: m.id, content: m.metadata?.content || '' })),
-            ...sparseForLlm.map(h => ({ id: h._source.pasal, content: `${h._source.pasal}: ${h._source.content}` }))
+            ...sparseForLlm.map(h => ({ id: h.id, content: `${h.id}: ${h.content}` }))
         ];
         const uniqueContext = Array.from(new Map(contextForLlm.map(item => [item.id, item])).values());
         // Truncate content for cleaner logs
@@ -126,8 +108,8 @@ export async function POST(req: Request) {
         console.log('[DEBUG] Combined and unique context for LLM:', JSON.stringify(truncatedUniqueContext, null, 2));
 
         const contextString = uniqueContext.map(c => `ID: ${c.id}\nContent: ${c.content}\n---`).join('\n\n');
-        
-        // If both Pinecone and Elasticsearch return no results, return a specific message early.
+
+        // If both Pinecone and Minisearch return no results, return a specific message early.
         if (uniqueContext.length === 0) {
             console.log("[DEBUG] No context found from any retrieval source. Returning early.");
             return NextResponse.json({
@@ -244,26 +226,15 @@ Pertanyaan Pengguna: "${query}"`;
             const llmArticleIds = llmResponse.articles.map(a => a.id);
             console.log(`[DEBUG] PRO LLM selected IDs:`, llmArticleIds);
 
-            // b) Perform a second, more precise "exact match" (match_phrase) search on Elasticsearch.
-            const exactMatchEsQuery = { query: { match_phrase: { content: query } }, size: 100 };
+            // b) Perform a second, more precise "exact match" (match_phrase) search on Minisearch.
             let exactMatchResults: any[] = [];
             try {
-                const httpsAgent = new https.Agent({ rejectUnauthorized: false });
-                const esRes = await axios.post(
-                    "https://nozomi.proxy.rlwy.net:44468/kuhp_merged/_search",
-                    exactMatchEsQuery,
-                    {
-                        timeout: 5000,
-                        auth: { username: "elastic", password: "MySecureP@ssw0rd!2025" },
-                        httpsAgent,
-                    }
-                );
-                exactMatchResults = esRes.data.hits.hits;
+                exactMatchResults = searchExact(query, 100);
                 console.log(`[DEBUG] PRO Exact match search found ${exactMatchResults.length} results.`);
             } catch (err) {
-                console.error("[DEBUG] PRO flow Elasticsearch exact match query failed:", err);
+                console.error("[DEBUG] PRO flow Minisearch exact match query failed:", err);
             }
-            const exactMatchIds = exactMatchResults.map(h => h._source.pasal);
+            const exactMatchIds = exactMatchResults.map(h => h.id);
 
             // c) Combine IDs from the LLM selection and the exact match search, ensuring they are unique.
             const combinedIds = [...new Set([...llmArticleIds, ...exactMatchIds])];
@@ -276,7 +247,7 @@ Pertanyaan Pengguna: "${query}"`;
                 const fetchedRecords = fetchResponse.records ?? {};
 
                 // Create a map of scores from the exact match results to add them to the final output
-                const exactMatchScoreMap = new Map(exactMatchResults.map(h => [h._source.pasal, h._score]));
+                const exactMatchScoreMap = new Map(exactMatchResults.map(h => [h.id, h.score]));
 
                 articlesForResponse = combinedIds.map(id => {
                     const vec = fetchedRecords[id];

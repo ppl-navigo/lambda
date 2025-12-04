@@ -74,6 +74,9 @@ dependencies:
   mathpix-markdown-it:
     specifier: ^2.0.11
     version: 2.0.15(webpack@5.99.9)
+  minisearch:
+    specifier: ^7.2.0
+    version: 7.2.0
   multer:
     specifier: 1.4.5-lts.2
     version: 1.4.5-lts.2
@@ -5619,6 +5622,10 @@ packages:
   /minipass@7.1.2:
     resolution: {integrity: sha512-qOOzS1cBTWYF4BH8fVePDBOO9iptMnGUEZwNc/cMWnTV2nVLZ7VoNWEPHkYczZA0pdoA7dl6e7FL659nX9S2aw==}
     engines: {node: '>=16 || 14 >=14.17'}
+    dev: false
+
+  /minisearch@7.2.0:
+    resolution: {integrity: sha512-dqT2XBYUOZOiC5t2HRnwADjhNS2cecp9u+TJRiJ1Qp/f5qjkeT5APcGPjHw+bz89Ms8Jp+cG4AlE+QZ/QnDglg==}
     dev: false
 
   /mj-context-menu@0.6.1:
