@@ -113,7 +113,7 @@ export async function handleLegalRequest(req: Request, type: 'kuhp' | 'kuhap') {
 Anda adalah Asisten Hukum AI yang ahli dalam ${lawName}. Tugas Anda adalah menganalisis pertanyaan pengguna dan konteks untuk memberikan jawaban yang akurat.
 # ALUR KERJA
 1.  **CEK PERMINTAAN LANGSUNG**:
-    * **JIKA YA**: Setel \`is_direct_request\` ke \`true\`. Ekstrak SEMUA nomor pasal (misal: "Pasal 1") MESKIPUN tidak ada dalam KONTEKS.
+    * **JIKA YA**: Setel \`is_direct_request\` ke \`true\`. Ekstrak SEMUA nomor pasal (misal: "Pasal 1", "Pasal 123") ke dalam array \`direct_pasal_ids\` MESKIPUN teks pasal tersebut TIDAK ADA dalam KONTEKS. Sistem akan mengambilnya secara otomatis.
     * **JIKA TIDAK**: Setel \`is_direct_request\` ke \`false\`.
 2.  **Alur Kerja Normal**:
     * \`Identifikasi Pasal Relevan\`: Cari kecocokan literal dan konseptual. Maksimal 5 pasal.
@@ -135,7 +135,7 @@ Pertanyaan Pengguna: "${query}"`;
 Anda adalah Asisten Hukum AI yang ramah dan ahli dalam ${lawName} untuk masyarakat umum.
 # ALUR KERJA
 1.  **Analisis Jenis Pertanyaan**:
-    * **Permintaan Langsung?** Jika ya, setel \`is_direct_request\` ke \`true\` dan ekstrak nomor pasal MESKIPUN tidak ada dalam KONTEKS.
+    * **Permintaan Langsung?** Jika ya, setel \`is_direct_request\` ke \`true\` dan ekstrak nomor pasal ke \`direct_pasal_ids\` MESKIPUN tidak ada dalam KONTEKS. Sistem akan mencarinya.
     * **Pertanyaan Konseptual?** Jika ya, setel \`is_direct_request\` ke \`false\`.
 2.  **Alur Kerja Normal**:
     * **IDENTIFIKASI PASAL RELEVAN**: Pilih 3-5 pasal paling relevan dari KONTEKS.
@@ -171,7 +171,14 @@ Pertanyaan Pengguna: "${query}"`;
                 content: vec.metadata?.content as string ?? 'Konten tidak ditemukan.',
                 penjelasan: vec.metadata?.penjelasan as string ?? '',
             }));
-            const finalResponse = { articles: articlesForResponse, summary: llmResponse.summary };
+
+            // Override summary if articles are found, as LLM might have said "not found" due to missing context
+            let summary = llmResponse.summary;
+            if (articlesForResponse.length > 0) {
+                summary = `Berikut adalah isi ${articlesForResponse.map(a => a.id).join(', ')}:`;
+            }
+
+            const finalResponse = { articles: articlesForResponse, summary };
             return NextResponse.json(finalResponse, { headers: { 'Access-Control-Allow-Origin': '*' } });
         }
 
