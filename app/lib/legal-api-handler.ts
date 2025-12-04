@@ -50,11 +50,12 @@ export async function handleLegalRequest(req: Request, type: 'kuhp' | 'kuhap') {
 
         // --- 1. Hybrid Retrieval Step ---
         let denseResults: { matches: any[] } = { matches: [] };
+
+        // Determine namespace: KUHP uses default (''), KUHAP uses 'KUHAP'
+        const namespace = type === 'kuhp' ? '' : type.toUpperCase();
+
         try {
             const { embedding } = await embed({ model: google.textEmbeddingModel("text-embedding-004"), value: query });
-            // Use namespace based on type (KUHP or KUHAP)
-            // Note: Pinecone index name is fixed in utils/pinecone.ts, but we use namespaces
-            const namespace = type.toUpperCase();
             denseResults = await index.namespace(namespace).query({ vector: embedding, topK: 10, includeMetadata: true });
         } catch (err) {
             console.warn("[WARN] Pinecone query failed, proceeding with sparse search results only.", err);
@@ -163,7 +164,7 @@ Pertanyaan Pengguna: "${query}"`;
         // a) Direct Request Handling
         if (llmResponse.is_direct_request && llmResponse.direct_pasal_ids && llmResponse.direct_pasal_ids.length > 0) {
             console.log(`[DEBUG] Direct request for: ${llmResponse.direct_pasal_ids.join(', ')}`);
-            const namespace = type.toUpperCase();
+            // Namespace is already defined above
             const fetchResponse = await index.namespace(namespace).fetch(llmResponse.direct_pasal_ids);
             const articlesForResponse = Object.values(fetchResponse.records ?? {}).map(vec => ({
                 id: vec.id,
@@ -198,7 +199,7 @@ Pertanyaan Pengguna: "${query}"`;
 
             let articlesForResponse: z.infer<typeof finalResponseSchema>['articles'] = [];
             if (combinedIds.length > 0) {
-                const namespace = type.toUpperCase();
+                // Namespace is already defined above
                 const fetchResponse = await index.namespace(namespace).fetch(combinedIds);
                 const fetchedRecords = fetchResponse.records ?? {};
                 const exactMatchScoreMap = new Map(exactMatchResults.map(h => [h.id, h.score]));
@@ -223,7 +224,7 @@ Pertanyaan Pengguna: "${query}"`;
             let articlesForResponse: z.infer<typeof finalResponseSchema>['articles'] = [];
 
             if (articleIds.length > 0) {
-                const namespace = type.toUpperCase();
+                // Namespace is already defined above
                 const fetchResponse = await index.namespace(namespace).fetch(articleIds);
                 const fetchedRecords = fetchResponse.records ?? {};
                 articlesForResponse = articleIds.map(id => {
