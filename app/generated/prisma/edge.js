@@ -159,7 +159,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/home/jdk/dev/navigo/navigo-frontend/app/generated/prisma",
+      "value": "C:\\Users\\bryan\\OneDrive\\Documents\\GitHub\\lambda\\app\\generated\\prisma",
       "fromEnvVar": null
     },
     "config": {
@@ -168,17 +168,16 @@ const config = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
-        "value": "debian-openssl-3.0.x",
+        "value": "windows",
         "native": true
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/home/jdk/dev/navigo/navigo-frontend/prisma/schema.prisma",
+    "sourceFilePath": "C:\\Users\\bryan\\OneDrive\\Documents\\GitHub\\lambda\\prisma\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": null,
-    "schemaEnvPath": "../../../.env"
+    "rootEnvPath": null
   },
   "relativePath": "../../../prisma",
   "clientVersion": "6.7.0",
@@ -187,16 +186,17 @@ const config = {
     "db"
   ],
   "activeProvider": "postgresql",
+  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
         "fromEnvVar": "DATABASE_URL",
-        "value": "postgresql://navigo_owner:npg_5buDplTWMhZ1@ep-withered-moon-a5p4gb9h-pooler.us-east-2.aws.neon.tech/navigo_staging?sslmode=require"
+        "value": null
       }
     }
   },
   "inlineSchema": "generator client {\n  provider = \"prisma-client-js\"\n  output   = \"../app/generated/prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Order {\n  order_id     String    @id\n  user_id      String\n  amount       Float\n  payment_link String\n  payments     Payment[]\n\n  @@map(\"orders\")\n}\n\nmodel Payment {\n  payment_id         String   @id @default(uuid())\n  currency           String\n  status             String\n  created_at         DateTime @default(now())\n  transaction_time   DateTime\n  transaction_status String\n  order_id           String\n  signature_key      String\n  gross_amount       Float\n  payment_type       String\n  orderOrder_id      String\n  metadata           Json     @default(\"{}\")\n  order              Order    @relation(fields: [orderOrder_id], references: [order_id])\n\n  @@map(\"payments\")\n}\n\nmodel Balance {\n  balance_id String   @id @default(uuid())\n  user_id    String   @unique\n  amount     Float    @default(250.0)\n  created_at DateTime @default(now())\n  updated_at DateTime @updatedAt\n\n  @@map(\"balances\")\n}\n",
-  "inlineSchemaHash": "039985c448a95be2b17918bb7bcc17887c960d035f31fe39def23afa4e5abf9e",
+  "inlineSchemaHash": "a870cd54eee975e9a1a0c300cae8cd3ff54f6bc5a511c6ff89bb1e4b8945e97c",
   "copyEngine": true
 }
 config.dirname = '/'
