@@ -20,7 +20,7 @@
     "@pinecone-database/pinecone": "^6.0.1",
     "@prisma/client": "6.7.0",
     "@sentry/nextjs": "^9.9.0",
-    "@supabase/supabase-js": "^2.49.4",
+    "@supabase/supabase-js": "^2.88.0",
     "ai": "^4.3.2",
     "axios": "^1.8.2",
     "cloudinary": "^2.6.0",
