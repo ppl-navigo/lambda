@@ -18,7 +18,7 @@
     "@ai-sdk/react": "^1.2.12",
     "@autometrics/autometrics": "^1.0.1",
     "@pinecone-database/pinecone": "^6.0.1",
-    "@prisma/client": "6.7.0",
+    "@prisma/client": "6.8.2",
     "@sentry/nextjs": "^9.9.0",
     "@supabase/supabase-js": "^2.49.4",
     "ai": "^4.3.2",
